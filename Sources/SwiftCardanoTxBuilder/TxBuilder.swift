@@ -555,16 +555,16 @@ public class TxBuilder {
         anchor: Anchor? = nil
     ) -> TxBuilder {
         if votingProcedures == nil {
-            votingProcedures = VotingProcedures(procedures: [:])
+            votingProcedures = [:]
         }
 
         // Initialize the inner map if this is the first vote for this voter
-        if votingProcedures!.procedures.contains(where: { $0.key == voter }) {
-            votingProcedures!.procedures[voter] = [:]
+        if votingProcedures!.contains(where: { $0.key == voter }) {
+            votingProcedures![voter] = [:]
         }
 
         // Add the voting procedure for this specific governance action
-        votingProcedures!.procedures[voter]![govActionId] = VotingProcedure(
+        votingProcedures![voter]![govActionId] = VotingProcedure(
             vote: vote, anchor: anchor)
 
         return self
@@ -1551,7 +1551,7 @@ public class TxBuilder {
         var results = Set<VerificationKeyHash>()
 
         if let votingProcedures = votingProcedures {
-            for voter in votingProcedures.procedures {
+            for voter in votingProcedures {
                 switch voter.key.credential {
                 case .constitutionalCommitteeHotKeyhash(let vkeyHash):
                     results.insert(vkeyHash)

@@ -23,7 +23,7 @@ public enum AddressOrString {
 
 // MARK: - Extensions
 
-extension ScriptOrUTxO {
+public extension ScriptOrUTxO {
     var asUTxO: UTxO? {
         if case .utxo(let utxo) = self {
             return utxo
@@ -39,7 +39,7 @@ extension ScriptOrUTxO {
     }
 }
 
-extension UTxOOrTransactionInput {
+public extension UTxOOrTransactionInput {
     var asUTxO: UTxO? {
         if case .utxo(let utxo) = self {
             return utxo
@@ -55,7 +55,7 @@ extension UTxOOrTransactionInput {
     }
 }
 
-extension AddressOrString {
+public extension AddressOrString {
     var asAddress: Address? {
         switch self {
             case .address(let address):

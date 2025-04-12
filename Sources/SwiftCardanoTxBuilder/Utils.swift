@@ -168,7 +168,7 @@ public func minLovelacePreAlonzo(
     let dataHashSize: UInt64 = hasDatum ? 10 : 0
     let finalizedSize = utxoEntrySize + bSize + dataHashSize
 
-    return finalizedSize * UInt64(protocolParameters.utxoCostPerByte)
+    return finalizedSize * UInt64(protocolParameters.coinsPerUtxoWord)
 }
 
 /// Calculate minimum lovelace a transaction output needs to hold post alonzo.
@@ -230,7 +230,7 @@ public func scriptDataHash(
     } else if let costModels = costModels {
         useCostModels = costModels
     } else {
-        useCostModels = try CostModels.fromStaticData()
+        useCostModels = try CostModels.forScriptDataHash()
     }
 
     let redeemerBytes = try redeemers.toCBOR()

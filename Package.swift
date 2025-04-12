@@ -18,10 +18,8 @@ let package = Package(
             targets: ["SwiftCardanoTxBuilder"]),
     ],
     dependencies: [
-//        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", branch: "main"),
-//        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", branch: "main"),
-        .package(path: "/Users/hadderley/Projects/AGL/Kingpin-Apps/swift-cardano-core"),
-        .package(path: "/Users/hadderley/Projects/AGL/Kingpin-Apps/swift-cardano-chain"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", revision: "c2f91a77a3915c71e65d0a0c26c820a2142c6a76"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", revision: "27740a3e905a81535647ebaeed81146f5354c60a"),
         .package(url: "https://github.com/Kingpin-Apps/swift-ncal.git", .upToNextMinor(from: "0.1.4")),
     ],
     targets: [
@@ -38,7 +36,10 @@ let package = Package(
         ),
         .testTarget(
             name: "SwiftCardanoTxBuilderTests",
-            dependencies: ["SwiftCardanoTxBuilder"]
+            dependencies: ["SwiftCardanoTxBuilder"],
+            resources: [
+               .copy("data")
+           ]
         ),
     ]
 )
