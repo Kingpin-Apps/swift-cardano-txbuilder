@@ -61,7 +61,7 @@ public extension AddressOrString {
             case .address(let address):
                 return address
             case .string(let string):
-                return try? Address(from: string)
+                return try? Address(from: .string(string))
         }
     }
     

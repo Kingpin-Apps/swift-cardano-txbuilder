@@ -1,6 +1,3 @@
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
-
 /**
  This module contains algorithms that select UTxOs from a parent list to satisfy some output constraints.
  */
@@ -9,14 +6,6 @@ import Foundation
 import SwiftCardanoChain
 import SwiftCardanoCore
 
-// MARK: - Errors
-
-public enum UTxOSelectionError: Error {
-    case insufficientUTxOBalance(String)
-    case maxInputCountExceeded(String)
-    case inputUTxODepleted(String)
-    case utxoSelectionFailed(String)
-}
 
 // MARK: - Constants
 
@@ -24,7 +13,7 @@ public enum UTxOSelectionError: Error {
 struct FakeAddress {
     static var address: Address {
         try! Address(
-            from: "addr1q8m9x2zsux7va6w892g38tvchnzahvcd9tykqf3ygnmwta8k2v59pcduem5uw253zwke30x9mwes62kfvqnzg38kuh6q966kg7"
+            from: .string("addr1q8m9x2zsux7va6w892g38tvchnzahvcd9tykqf3ygnmwta8k2v59pcduem5uw253zwke30x9mwes62kfvqnzg38kuh6q966kg7")
         )
     }
 }
@@ -54,10 +43,10 @@ public protocol UTxOSelector {
         - changes: Change amount to be returned.
 
      - Throws:
-        - UTxOSelectionError.insufficientUTxOBalance: When total value of input UTxO is less than requested outputs.
-        - UTxOSelectionError.maxInputCountExceeded: When number of selected UTxOs exceeds `maxInputCount`.
-        - UTxOSelectionError.inputUTxODepleted: When the algorithm has depleted input UTxOs but selection should continue.
-        - UTxOSelectionError.utxoSelectionFailed: When selection fails for reasons besides the three above.
+        - CardanoTxBuilderError.insufficientUTxOBalance: When total value of input UTxO is less than requested outputs.
+        - CardanoTxBuilderError.maxInputCountExceeded: When number of selected UTxOs exceeds `maxInputCount`.
+        - CardanoTxBuilderError.inputUTxODepleted: When the algorithm has depleted input UTxOs but selection should continue.
+        - CardanoTxBuilderError.utxoSelectionFailed: When selection fails for reasons besides the three above.
      */
     func select(
         utxos: [UTxO],
@@ -88,7 +77,9 @@ public class LargestFirstSelector: UTxOSelector {
         includeMaxFee: Bool = true,
         respectMinUtxo: Bool = true
     ) async throws -> ([UTxO], Value) {
-        var available = utxos.sorted { $0.output.amount.coin < $1.output.amount.coin }
+        var available = utxos.sorted {
+            $0.output.lovelace > $1.output.lovelace
+        }
         let maxFee = includeMaxFee ? try await maxTxFee(context) : 0
         var totalRequested = Value(coin: Int(maxFee))
 
@@ -101,15 +92,15 @@ public class LargestFirstSelector: UTxOSelector {
 
         while !(totalRequested <= selectedAmount) {
             if available.isEmpty {
-                throw UTxOSelectionError.insufficientUTxOBalance("UTxO Balance insufficient!")
+                throw CardanoTxBuilderError.insufficientUTxOBalance("UTxO Balance insufficient!")
             }
 
-            let toAdd = available.removeLast()
+            let toAdd = available.removeFirst()
             selected.append(toAdd)
             selectedAmount = selectedAmount + toAdd.output.amount
 
             if let maxInputCount = maxInputCount, selected.count > maxInputCount {
-                throw UTxOSelectionError.maxInputCountExceeded(
+                throw CardanoTxBuilderError.maxInputCountExceeded(
                     "Max input count: \(maxInputCount) exceeded!")
             }
         }
@@ -133,8 +124,7 @@ public class LargestFirstSelector: UTxOSelector {
                         )
                     ],
                     context: context,
-                    maxInputCount: maxInputCount.map { $0 - selected.count
- },
+                    maxInputCount: maxInputCount.map { $0 - selected.count },
                     includeMaxFee: false,
                     respectMinUtxo: false
                 ).0
@@ -181,14 +171,14 @@ public class RandomImproveMultiAsset: UTxOSelector {
 
     private func getNextRandom(utxos: [UTxO]) throws -> (Int, UTxO) {
         if utxos.isEmpty {
-            throw UTxOSelectionError.inputUTxODepleted("Input UTxOs depleted!")
+            throw CardanoTxBuilderError.inputUTxODepleted("Input UTxOs depleted!")
         }
 
         let index: Int
         if let generator = randomGenerator {
             index = generator()
             if index >= utxos.count {
-                throw UTxOSelectionError.utxoSelectionFailed("Random index: \(index) out of range!")
+                throw CardanoTxBuilderError.utxoSelectionFailed("Random index: \(index) out of range!")
             }
         } else {
             index = Int.random(in: 0..<utxos.count)
@@ -205,7 +195,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
     ) throws {
         while !(amount <= selectedAmount) {
             if remaining.isEmpty {
-                throw UTxOSelectionError.inputUTxODepleted("Input UTxOs depleted!")
+                throw CardanoTxBuilderError.inputUTxODepleted("Input UTxOs depleted!")
             }
 
             let (index, toAdd) = try getNextRandom(utxos: remaining)
@@ -243,15 +233,23 @@ public class RandomImproveMultiAsset: UTxOSelector {
             return UInt64(value.multiAsset[policyId]![assetName]!)
         }
     }
-
+    
+    /// The first argument contains only one asset. Find the absolute difference between this asset and
+    /// the corresponding value of the same asset in the second argument
+    /// - Parameters:
+    ///   - a: The first value containing only one asset
+    ///   - b: The second value containing the same asset
+    /// - Returns: Difference between the two values
     private func findDiffByFormer(a: Value, b: Value) -> Int64 {
         if a.coin > 0 {
             return Int64(a.coin) - Int64(b.coin)
         } else {
             let policyId = a.multiAsset.data.keys.first!
             let assetName = a.multiAsset[policyId]!.data.keys.first!
-            return Int64(a.multiAsset[policyId]![assetName]!)
-                - Int64(b.multiAsset[policyId]![assetName]!)
+            
+            let aAssetAmount = a.multiAsset[policyId]?[assetName] ?? 0
+            let bAssetAmount = b.multiAsset[policyId]?[assetName] ?? 0
+            return Int64(aAssetAmount) - Int64(bAssetAmount)
         }
     }
 
@@ -270,7 +268,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
         }
 
         if let maxInputCount = maxInputCount, selected.count > maxInputCount {
-            throw UTxOSelectionError.maxInputCountExceeded(
+            throw CardanoTxBuilderError.maxInputCountExceeded(
                 "Max input count: \(maxInputCount) exceeded!")
         }
 
@@ -332,8 +330,9 @@ public class RandomImproveMultiAsset: UTxOSelector {
             )
 
             if let maxInputCount = maxInputCount, selected.count > maxInputCount {
-                throw UTxOSelectionError.maxInputCountExceeded(
-                    "Max input count: \(maxInputCount) exceeded!")
+                throw CardanoTxBuilderError.maxInputCountExceeded(
+                    "Max input count: \(maxInputCount) exceeded!"
+                )
             }
         }
 
@@ -380,8 +379,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
                         )
                     ],
                     context: context,
-                    maxInputCount: maxInputCount.map { $0 - selected.count
- },
+                    maxInputCount: maxInputCount.map { $0 - selected.count },
                     includeMaxFee: false,
                     respectMinUtxo: false
                 ).0

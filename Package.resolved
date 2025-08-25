@@ -1,5 +1,5 @@
 {
-  "originHash" : "843994e8775af1334f91528ceb2a2402f957c6a32d79b2b3135fde1d8531260c",
+  "originHash" : "d0629912c48ffbec5fb6d4bc931e32d2bd7665039610de27c91e80e755df3871",
   "pins" : [
     {
       "identity" : "base32",
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/krzyzanowskim/CryptoSwift.git",
       "state" : {
-        "revision" : "729e01bc9b9dab466ac85f21fb9ee2bc1c61b258",
-        "version" : "1.8.4"
+        "revision" : "e45a26384239e028ec87fbcc788f513b67e10d8f",
+        "version" : "1.9.0"
       }
     },
     {
@@ -69,7 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/KINGH242/PotentCodables.git",
       "state" : {
-        "revision" : "5fc0820266db3b912db3f9db41aabe812d2fe0b9"
+        "revision" : "1b3880253008d76dc16e48d6140a81d061214324",
+        "version" : "3.6.0"
       }
     },
     {
@@ -113,8 +114,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-chain.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "27740a3e905a81535647ebaeed81146f5354c60a"
+        "revision" : "3e3036cb0380a9cea67a25fd182ad4b49e73cb80",
+        "version" : "0.1.13"
       }
     },
     {
@@ -122,7 +123,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-core.git",
       "state" : {
-        "revision" : "c2f91a77a3915c71e65d0a0c26c820a2142c6a76"
+        "revision" : "fc614196b380c871b7ca8b83d7117f9ba0c9b834",
+        "version" : "0.1.29"
       }
     },
     {
@@ -157,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "3d8596ed08bd13520157f0355e35caed215ffbfa",
-        "version" : "1.6.3"
+        "revision" : "ce592ae52f982c847a4efc0dd881cc9eb32d29f2",
+        "version" : "1.6.4"
       }
     },
     {

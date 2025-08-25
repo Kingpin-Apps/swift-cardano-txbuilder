@@ -206,97 +206,158 @@ struct TestMinLoveLaceMultiAsset {
     }
 }
 
-@Test("Script Data Hash")
-func testScriptDataHash() throws {
-    let unit = SwiftCardanoCore.Unit()
-    let redeemers = Redeemers.list([
-        Redeemer(
-            tag: .spend,
-            index: 0,
-            data: try AnyValue.Encoder().encode(unit),
-            exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
+// MARK: - ScriptDataHash Tests
+@Suite("Test ScriptDataHash")
+struct TestScriptDataHash {
+    
+    @Test("Script Data Hash")
+    func testScriptDataHash() throws {
+        let unit = SwiftCardanoCore.Unit()
+        let redeemers: Redeemers<SwiftCardanoCore.Unit> = .list([
+            Redeemer<SwiftCardanoCore.Unit>(
+                tag: .spend,
+                index: 0,
+                data: unit,
+                exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
+            )
+        ])
+        
+        let result = try Utils.scriptDataHash(
+            redeemers: redeemers,
+            datums: [.plutusData(unit)]
         )
-    ])
-
-    let result = try scriptDataHash(
-        redeemers: redeemers,
-        datums: [.bytes(unit.toCBOR())]
-    )
-    let scriptHash = try ScriptDataHash(
-        from: "032d812ee0731af78fe4ec67e4d30d16313c09e6fb675af28f825797e8b5621d"
-    )
-    print("Script Hash: \(scriptHash)")
-    #expect(result.payload.toHex == scriptHash.payload.toHex)
+        let scriptHash = try ScriptDataHash(
+            from:
+                    .string(
+                        "032d812ee0731af78fe4ec67e4d30d16313c09e6fb675af28f825797e8b5621d"
+                    )
+        )
+        
+        #expect(result.payload.toHex == scriptHash.payload.toHex)
+    }
+    
+    @Test("Script Data Hash with Datum Only")
+    func testScriptDataHashDatumOnly() throws {
+        let unit = SwiftCardanoCore.Unit()
+        
+        let result = try Utils<Never>.scriptDataHash(
+            datums: [.plutusData(unit)],
+        )
+        let scriptHash = try ScriptDataHash(
+            from: .string("2f50ea2546f8ce020ca45bfcf2abeb02ff18af2283466f888ae489184b3d2d39")
+        )
+        
+        #expect(result.payload.toHex == scriptHash.payload.toHex)
+    }
+    
+    @Test("Script Data Hash with Redeemer Only")
+    func testScriptDataHashRedeemerOnly() throws {
+        let result = try Utils<Never>.scriptDataHash(
+            redeemers: .list([])
+        )
+        let scriptHash = try ScriptDataHash(
+            from: .string("a88fe2947b8d45d1f8b798e52174202579ecf847b8f17038c7398103df2d27b0")
+        )
+        
+        #expect(result.payload.toHex == scriptHash.payload.toHex)
+    }
 }
 
-//@Suite("Utils Tests", .disabled())
-//struct UtilsTests {
-//
-//    // MARK: - Script Data Hash Tests
-//
+// MARK: - Tiered Reference Script Fee Tests
+@Suite("TieredReferenceScriptFee Tests")
+struct TieredReferenceScriptFeeTests {
+    
+    @Test("Tiered Reference Script Fee")
+    func testTieredReferenceScriptFee() async throws {
+        let context = MockChainContext()
 
-//
-//    @Test("Script Data Hash Datum Only")
-//    func testScriptDataHashDatumOnly() throws {
-//        let unit = Unit()
-//        let result = try scriptDataHash(redeemers: Redeemers.list([]), datums: [unit])
-//        #expect(
-//            result.payload.hexString
-//                == "2f50ea2546f8ce020ca45bfcf2abeb02ff18af2283466f888ae489184b3d2d39")
-//    }
-//
-//    // MARK: - Tiered Reference Script Fee Tests
-//
-//    @Test("Tiered Reference Script Fee")
-//    func testTieredReferenceScriptFee() async throws {
-//        let minFeeReferenceScripts = MinFeeReferenceScripts(
-//            base: 44,
-//            range: 25600,
-//            multiplier: 1.2
-//        )
-//        let context = MockChainContext(
-//            protocolParameters: MockProtocolParameters(
-//                maxReferenceScriptsSize: 200 * 1024,
-//                minFeeReferenceScripts: minFeeReferenceScripts
-//            )
-//        )
-//
-//        let result = try await tieredReferenceScriptFee(context, scriptsSize: 80 * 1024)
-//        #expect(result == 4_489_380)
-//    }
-//
-//    @Test("Tiered Reference Script Fee Exceeds Max Size")
-//    func testTieredReferenceScriptFeeExceedsMaxSize() async throws {
-//        let minFeeReferenceScripts = MinFeeReferenceScripts(
-//            base: 10,
-//            range: 100,
-//            multiplier: 1.1
-//        )
-//        let context = MockChainContext(
-//            protocolParameters: MockProtocolParameters(
-//                maxReferenceScriptsSize: 1000,
-//                minFeeReferenceScripts: minFeeReferenceScripts
-//            )
-//        )
-//
-//        await #expect(
-//            throws: CardanoTxBuilderError.valueError(
-//                "Warning: Reference scripts size: 1001 exceeds maximum allowed size (1000).")
-//        ) {
-//            _ = try await tieredReferenceScriptFee(context, scriptsSize: 1001)
-//        }
-//    }
-//
-//    @Test("Tiered Reference Script Fee No Params")
-//    func testTieredReferenceScriptFeeNoParams() async throws {
-//        let context = MockChainContext(
-//            protocolParameters: MockProtocolParameters(
-//                maxReferenceScriptsSize: nil,
-//                minFeeReferenceScripts: nil
-//            )
-//        )
-//
-//        let result = try await tieredReferenceScriptFee(context, scriptsSize: 100)
-//        #expect(result == 0)
-//    }
-//}
+        let result = try await tieredReferenceScriptFee(context, scriptsSize: 80 * 1024)
+        #expect(result == 4_489_380)
+    }
+
+    @Test("Tiered Reference Script Fee Exceeds Max Size")
+    func testTieredReferenceScriptFeeExceedsMaxSize() async throws {
+        let context = MockChainContext()
+
+        await #expect(
+            throws: CardanoTxBuilderError.valueError(
+                "Reference scripts size: 204801 exceeds maximum allowed size (204800).")
+        ) {
+            _ = try await tieredReferenceScriptFee(context, scriptsSize: 204801)
+        }
+    }
+
+    @Test("Tiered Reference Script Fee No Params")
+    func testTieredReferenceScriptFeeNoParams() async throws {
+        let context = MockChainContext(
+            protocolParameters: ProtocolParameters(
+                collateralPercentage: 0,
+                coinsPerUtxoWord: 0,
+                committeeMaxTermLength: 0,
+                committeeMinSize: 0,
+                costModels: ProtocolParametersCostModels(
+                    PlutusV1: [],
+                    PlutusV2: [],
+                    PlutusV3: []
+                ),
+                dRepActivity: 0,
+                dRepDeposit: 0,
+                dRepVotingThresholds: DRepVotingThresholds(
+                    committeeNoConfidence: 0,
+                    committeeNormal: 0,
+                    hardForkInitiation: 0,
+                    motionNoConfidence: 0,
+                    ppEconomicGroup: 0,
+                    ppGovGroup: 0,
+                    ppNetworkGroup: 0,
+                    ppTechnicalGroup: 0,
+                    treasuryWithdrawal: 0,
+                    updateToConstitution: 0
+                ),
+                executionUnitPrices: ExecutionUnitPrices(
+                    priceMemory: 0,
+                    priceSteps: 0
+                ),
+                govActionDeposit: 0,
+                govActionLifetime: 0,
+                maxBlockBodySize: 0,
+                maxBlockExecutionUnits: ProtocolParametersExecutionUnits(
+                    memory: 0,
+                    steps: 0
+                ),
+                maxBlockHeaderSize: 0,
+                maxCollateralInputs: 0,
+                maxTxExecutionUnits: ProtocolParametersExecutionUnits(
+                    memory: 0,
+                    steps: 0
+                ),
+                maxTxSize: 0,
+                maxValueSize: 0,
+                minPoolCost: 0,
+                monetaryExpansion: 0,
+                poolPledgeInfluence: 0,
+                poolRetireMaxEpoch: 0,
+                poolVotingThresholds: ProtocolParametersPoolVotingThresholds(
+                    committeeNoConfidence: 0,
+                    committeeNormal: 0,
+                    hardForkInitiation: 0,
+                    motionNoConfidence: 0,
+                    ppSecurityGroup: 0
+                ),
+                protocolVersion: ProtocolParametersProtocolVersion(
+                    major: 0,
+                    minor: 0
+                ),
+                stakeAddressDeposit: 0,
+                stakePoolDeposit: 0,
+                stakePoolTargetNum: 0,
+                treasuryCut: 0,
+                txFeeFixed: 0,
+                txFeePerByte: 0,
+                utxoCostPerByte: 0
+            ))
+
+        let result = try await tieredReferenceScriptFee(context, scriptsSize: 100)
+        #expect(result == 0)
+    }
+}

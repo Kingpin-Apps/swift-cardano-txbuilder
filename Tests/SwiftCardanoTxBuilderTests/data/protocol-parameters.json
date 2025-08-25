@@ -675,6 +675,7 @@
     },
     "maxBlockHeaderSize": 1100,
     "maxCollateralInputs": 3,
+    "maxReferenceScriptsSize": 204800,
     "maxTxExecutionUnits": {
         "memory": 14000000,
         "steps": 10000000000
@@ -682,6 +683,11 @@
     "maxTxSize": 16384,
     "maxValueSize": 5000,
     "minFeeRefScriptCostPerByte": 15,
+    "minFeeReferenceScripts": {
+        "base": 44,
+        "multiplier": 1.2,
+        "range": 25600
+    },
     "minPoolCost": 170000000,
     "monetaryExpansion": 3.0e-3,
     "poolPledgeInfluence": 0.3,

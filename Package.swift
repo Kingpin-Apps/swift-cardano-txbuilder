@@ -7,7 +7,7 @@ let package = Package(
     name: "SwiftCardanoTxBuilder",
     platforms: [
       .iOS(.v14),
-      .macOS(.v13),
+      .macOS(.v14),
       .watchOS(.v7),
       .tvOS(.v14),
     ],
@@ -18,8 +18,8 @@ let package = Package(
             targets: ["SwiftCardanoTxBuilder"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", revision: "c2f91a77a3915c71e65d0a0c26c820a2142c6a76"),
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", revision: "27740a3e905a81535647ebaeed81146f5354c60a"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", .upToNextMinor(from: "0.1.29")),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", .upToNextMinor(from: "0.1.13")),
         .package(url: "https://github.com/Kingpin-Apps/swift-ncal.git", .upToNextMinor(from: "0.1.4")),
     ],
     targets: [

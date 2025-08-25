@@ -2,6 +2,7 @@ import Foundation
 import SwiftCardanoChain
 import SwiftCardanoCore
 import SwiftNcal
+import PotentCBOR
 
 // MARK: - Utility Functions
 
@@ -24,7 +25,7 @@ public func tieredReferenceScriptFee(_ context: any ChainContext, scriptsSize: U
     let maxSize = protocolParameters.maxReferenceScriptsSize!
     if scriptsSize > maxSize {
         throw CardanoTxBuilderError.valueError(
-            "Warning: Reference scripts size: \(scriptsSize) exceeds maximum allowed size (\(maxSize))."
+            "Reference scripts size: \(scriptsSize) exceeds maximum allowed size (\(maxSize))."
         )
     }
 
@@ -203,48 +204,56 @@ public func minLovelacePostAlonzo(_ output: TransactionOutput, _ context: any Ch
     * UInt64(protocolParameters.utxoCostPerByte)
 }
 
-/// Calculate plutus script data hash
-///
-/// - Parameters:
-///   - redeemers: Redeemers to include.
-///   - datums: Datums to include.
-///   - costModels: Cost models.
-/// - Returns: Plutus script data hash
-public func scriptDataHash(
-    redeemers: Redeemers,
-    datums: [Datum],
-    costModels: CostModels? = nil
-) throws -> ScriptDataHash {
-    let useCostModels: CostModels
+struct Utils<T: Codable & Hashable> {
     
-    let redeemersIsEmpty: Bool
-    switch redeemers {
-        case .list(let redeemers):
-            redeemersIsEmpty = redeemers.isEmpty
-        case .map(let redeemers):
-            redeemersIsEmpty = redeemers.isEmpty
-    }
-
-    if redeemersIsEmpty {
-        useCostModels = try CostModels([:])
-    } else if let costModels = costModels {
-        useCostModels = costModels
-    } else {
-        useCostModels = try CostModels.forScriptDataHash()
-    }
-
-    let redeemerBytes = try redeemers.toCBOR()
-    let datumBytes = datums.isEmpty ? Data() : try datums.map { try $0.toCBOR() }.reduce(
-        Data(),
-        +
-    )
-    let costModelsBytes = try useCostModels.toCBOR()
-
-    return ScriptDataHash(
-        payload: try SwiftNcal.Hash().blake2b(
-            data: redeemerBytes + datumBytes + costModelsBytes,
-            digestSize: SCRIPT_DATA_HASH_SIZE,
-            encoder: RawEncoder.self
+    /// Calculate plutus script data hash
+    ///
+    /// - Parameters:
+    ///   - redeemers: Redeemers to include.
+    ///   - datums: Datums to include.
+    ///   - costModels: Cost models.
+    /// - Returns: Plutus script data hash
+    public static func scriptDataHash(
+        redeemers: Redeemers<T>? = .list([]),
+        datums: [Datum] = [],
+        costModels: CostModels? = nil
+    ) throws -> ScriptDataHash {
+        let costModelsBytes: Data
+        let datumBytes: Data
+        
+        let redeemersIsEmpty: Bool
+        switch redeemers {
+            case .list(let list):
+                redeemersIsEmpty = list.isEmpty
+            case .map(let map):
+                redeemersIsEmpty = map.count == 0
+            case .none:
+                redeemersIsEmpty = true
+        }
+        
+        if redeemersIsEmpty {
+            costModelsBytes = try CBOREncoder().encode(CBOR.map([:]))
+        } else if let costModels = costModels {
+            costModelsBytes = try costModels.toCBOR()
+        } else {
+            let costModels = try CostModels.forScriptDataHash()
+            costModelsBytes = try costModels.toCBOR()
+        }
+        
+        if datums.isEmpty {
+            datumBytes = Data()
+        } else {
+            datumBytes = try CBOREncoder().encode(datums)
+        }
+        
+        let redeemerBytes = try redeemers?.toCBOR() ?? Data()
+        
+        return ScriptDataHash(
+            payload: try SwiftNcal.Hash().blake2b(
+                data: redeemerBytes + datumBytes + costModelsBytes,
+                digestSize: SCRIPT_DATA_HASH_SIZE,
+                encoder: RawEncoder.self
+            )
         )
-    )
+    }
 }

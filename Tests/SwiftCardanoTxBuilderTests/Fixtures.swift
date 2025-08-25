@@ -9,6 +9,8 @@ import SwiftCardanoCore
 // MARK: - Mock Classes
 
 class MockChainContext: ChainContext {
+    typealias ReedemerType = Never
+
     private var _protocolParameters: ProtocolParameters?
     
     var protocolParameters: () async throws -> SwiftCardanoCore.ProtocolParameters {
@@ -64,7 +66,36 @@ class MockChainContext: ChainContext {
 
 
     func utxos(address: SwiftCardanoCore.Address) async throws -> [SwiftCardanoCore.UTxO] {
-        return []
+        let txIn1 = TransactionInput(
+            transactionId: TransactionId(payload: Data(repeating: 1, count: 32)),
+            index: 0
+        )
+        let txIn2 = TransactionInput(
+            transactionId: TransactionId(payload: Data(repeating: 2, count: 32)),
+            index: 1
+        )
+        
+        let txOut1 = TransactionOutput(
+            address: address,
+            amount: Value(coin: 500_000_000)
+        )
+        
+        let policyId = PolicyID(payload: Data(repeating: 1, count: 28))
+        let multiAsset = MultiAsset([
+            policyId: Asset([
+                try AssetName(payload: Data("Token1".utf8)): 1,
+                try AssetName(payload: Data("Token2".utf8)): 2
+            ])
+        ])
+        let txOut2 = TransactionOutput(
+            address: address,
+            amount: Value(coin: 600_000_000, multiAsset: multiAsset)
+        )
+        
+        return [
+            UTxO(input: txIn1, output: txOut1),
+            UTxO(input: txIn2, output: txOut2)
+        ]
     }
 
     func submitTxCBOR(cbor: Data) async throws -> String {
@@ -81,7 +112,7 @@ class MockChainContext: ChainContext {
 
     init() {}
     
-    init(protocolParameters: ProtocolParameters) {
+    init(protocolParameters: ProtocolParameters?) {
         self._protocolParameters = protocolParameters
     }
 }

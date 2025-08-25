@@ -1,12 +1,13 @@
 import Foundation
 import Logging
+import OrderedCollections
 import SwiftCardanoChain
 import SwiftCardanoCore
 
 let logger = Logger(label: "com.swift-cardano-txbuilder")
 
 /// A class builder that makes it easy to build a transaction.
-public class TxBuilder {
+public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == Context.ReedemerType {
     // MARK: - Constants
 
     private static var FAKE_VKEY: any VerificationKey {
@@ -28,7 +29,7 @@ public class TxBuilder {
     // MARK: - Properties
 
     /// The chain context for this transaction builder
-    public let context: any ChainContext
+    public let context: Context
 
     /// UTxO selectors used for coin selection
     public var utxoSelectors: [UTxOSelector] = [RandomImproveMultiAsset(), LargestFirstSelector()]
@@ -104,10 +105,10 @@ public class TxBuilder {
     private var _datums: [DatumHash: Datum] = [:]
     private var _collateralReturn: TransactionOutput?
     private var _totalCollateral: Int?
-    private var _inputsToRedeemers: [UTxO: Redeemer] = [:]
-    private var _mintingScriptToRedeemers: [(ScriptType, Redeemer?)] = []
-    private var _withdrawalScriptToRedeemers: [(ScriptType, Redeemer?)] = []
-    private var _certificateScriptToRedeemers: [(ScriptType, Redeemer?)] = []
+    private var _inputsToRedeemers: [UTxO: Redeemer<T>] = [:]
+    private var _mintingScriptToRedeemers: [(ScriptType, Redeemer<T>?)] = []
+    private var _withdrawalScriptToRedeemers: [(ScriptType, Redeemer<T>?)] = []
+    private var _certificateScriptToRedeemers: [(ScriptType, Redeemer<T>?)] = []
     private var _inputsToScripts: [UTxO: ScriptType] = [:]
     private var _referenceScripts: [ScriptType] = []
     private var _shouldEstimateExecutionUnits: Bool?
@@ -119,8 +120,35 @@ public class TxBuilder {
 
     /// Initialize a new transaction builder
     /// - Parameter context: The chain context to use
-    public init(context: any ChainContext) {
+    public init(context: Context,
+                utxoSelectors: [UTxOSelector] = [RandomImproveMultiAsset(), LargestFirstSelector()],
+                executionMemoryBuffer: Double = 0.2,
+                executionStepBuffer: Double = 0.2,
+                feeBuffer: Int? = nil,
+                ttl: Int? = nil,
+                validityStart: Int? = nil,
+                auxiliaryData: AuxiliaryData? = nil,
+                nativeScripts: [NativeScript]? = nil,
+                mint: MultiAsset? = nil,
+                requiredSigners: [VerificationKeyHash]? = nil,
+                collaterals: [UTxO] = [],
+                certificates: [Certificate]? = nil,
+                withdrawals: Withdrawals? = nil,
+    ) {
         self.context = context
+        self.utxoSelectors = utxoSelectors
+        self.executionMemoryBuffer = executionMemoryBuffer
+        self.executionStepBuffer = executionStepBuffer
+        self.feeBuffer = feeBuffer
+        self.ttl = ttl
+        self.validityStart = validityStart
+        self.auxiliaryData = auxiliaryData
+        self.nativeScripts = nativeScripts
+        self.mint = mint
+        self.requiredSigners = requiredSigners
+        self.collaterals = collaterals
+        self.certificates = certificates
+        self.withdrawals = withdrawals
         setupLogging()
     }
 
@@ -147,7 +175,7 @@ public class TxBuilder {
         _ utxo: UTxO,
         script: ScriptOrUTxO? = nil,
         datum: Datum? = nil,
-        redeemer: Redeemer? = nil
+        redeemer: Redeemer<T>? = nil
     ) async throws -> TxBuilder {
         guard
             String(describing: type(of: utxo.output.address.addressType))
@@ -258,7 +286,7 @@ public class TxBuilder {
     @discardableResult
     public func addMintingScript(
         _ script: ScriptOrUTxO,
-        redeemer: Redeemer? = nil
+        redeemer: Redeemer<T>? = nil
     ) throws -> TxBuilder {
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
@@ -293,7 +321,7 @@ public class TxBuilder {
     @discardableResult
     public func addWithdrawalScript(
         _ script: ScriptOrUTxO,
-        redeemer: Redeemer? = nil
+        redeemer: Redeemer<T>? = nil
     ) throws -> TxBuilder {
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
@@ -330,7 +358,7 @@ public class TxBuilder {
     @discardableResult
     public func addCertificateScript(
         _ script: ScriptOrUTxO,
-        redeemer: Redeemer? = nil
+        redeemer: Redeemer<T>? = nil
     ) throws -> TxBuilder {
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
@@ -497,8 +525,8 @@ public class TxBuilder {
     }
 
     /// The redeemers used in the transaction
-    private var _redeemerList: [Redeemer] {
-        var redeemers: [Redeemer] = []
+    private var _redeemerList: [Redeemer<T>] {
+        var redeemers: [Redeemer<T>] = []
 
         redeemers += _inputsToRedeemers.values.map { $0 }
         redeemers += _mintingScriptToRedeemers.compactMap { $0.1 }
@@ -510,12 +538,12 @@ public class TxBuilder {
     }
 
     /// Get the redeemers for the transaction
-    public func redeemers() throws -> Redeemers {
+    public func redeemers() throws -> Redeemers<T> {
         let redeemerList = _redeemerList
 
         // We have to serialize redeemers as a map if there are no redeemers
         if useRedeemerMap || redeemerList.isEmpty {
-            var redeemers = RedeemerMap()
+            var redeemers = RedeemerMap<T>()
 
             for redeemer in redeemerList {
                 guard let tag = redeemer.tag else {
@@ -790,7 +818,7 @@ public class TxBuilder {
                         utxos: additionalUtxoPool,
                         outputs: [
                             TransactionOutput(
-                                address: Address(from: TxBuilder.FAKE_VKEY.hash()),
+                                address: Address(paymentPart: .verificationKeyHash(TxBuilder.FAKE_VKEY.hash())),
                                 amount: unfulfilledAmount
                             )
                         ],
@@ -888,7 +916,7 @@ public class TxBuilder {
         autoTtlOffset: Int? = nil,
         autoRequiredSigners: Bool? = nil,
         forceSkeys: Bool = false
-    ) async throws -> Transaction {
+    ) async throws -> Transaction<T> {
         // The given signers should be required signers if they weren't added yet
         if autoRequiredSigners == true && !allScripts.isEmpty && requiredSigners == nil {
             // Collect all signatories from explicitly defined
@@ -947,8 +975,37 @@ public class TxBuilder {
     }
 
     // MARK: - Private Methods
+    
+    /// Check if the provided Value can cover the requested Value
+    /// - Parameters:
+    ///   - provided: The Value being provided (from inputs, minting, withdrawals)
+    ///   - requested: The Value being requested (for outputs and fees)
+    /// - Returns: True if provided can cover requested
+    private func canCoverRequested(provided: Value, requested: Value) -> Bool {
+        // First check if coins are sufficient
+        guard provided.coin >= requested.coin else {
+            return false
+        }
+        
+        // Then check if all multi-assets are covered
+        for (policyId, requestedAsset) in requested.multiAsset.data {
+            guard let providedAsset = provided.multiAsset.data[policyId] else {
+                // Missing policy ID in provided
+                return false
+            }
+            
+            for (assetName, requestedAmount) in requestedAsset.data {
+                let providedAmount = providedAsset.data[assetName] ?? 0
+                guard providedAmount >= requestedAmount else {
+                    return false
+                }
+            }
+        }
+        
+        return true
+    }
 
-    private func consolidateRedeemer(_ redeemer: inout Redeemer) throws {
+    private func consolidateRedeemer(_ redeemer: inout Redeemer<T>) throws {
         if _shouldEstimateExecutionUnits == nil {
             if redeemer.exUnits != nil {
                 _shouldEstimateExecutionUnits = false
@@ -1009,7 +1066,9 @@ public class TxBuilder {
         provided.coin -= try await getTotalKeyDeposit()
         provided.coin -= getTotalProposalDeposit()
 
-        guard requested < provided else {
+        guard canCoverRequested(provided: provided, requested: requested) else {
+            print("Requested: \(requested)")
+            print("Provided: \(provided)")
             throw CardanoTxBuilderError.invalidTransaction(
                 "The input UTxOs cannot cover the transaction outputs and tx fee.\n"
                     + "Inputs: \(inputs)\n" + "Outputs: \(outputs)\n" + "fee: \(fees)"
@@ -1341,7 +1400,7 @@ public class TxBuilder {
         return txBody
     }
 
-    private func buildFullFakeTx() async throws -> Transaction {
+    private func buildFullFakeTx() async throws -> Transaction<T> {
         var txBody = try! await buildTxBody()
 
         if txBody.fee == 0 {
@@ -1351,7 +1410,7 @@ public class TxBuilder {
         }
 
         let witness = try buildFakeWitnessSet()
-        let tx = Transaction(
+        let tx = Transaction<T>(
             transactionBody: txBody,
             transactionWitnessSet: witness,
             valid: true,
@@ -1371,7 +1430,7 @@ public class TxBuilder {
         return tx
     }
 
-    private func buildFakeWitnessSet() throws -> TransactionWitnessSet {
+    private func buildFakeWitnessSet() throws -> TransactionWitnessSet<T> {
         var witnessSet = try! buildWitnessSet(removeDupScript: true)
         if try witnessCount() > 0 {
             witnessSet.vkeyWitnesses = try buildFakeVkeyWitnesses()
@@ -1381,36 +1440,33 @@ public class TxBuilder {
 
     private func buildFakeVkeyWitnesses() throws -> NonEmptyOrderedCBORSet<VerificationKeyWitness> {
         var witnesses: [VerificationKeyWitness] = []
-        let _witCount = try witnessCount()
-        for i in 0..<_witCount {
-            // Convert index to 32 bytes (big endian) to match Python's to_bytes(32, "big")
+        let witnessCount = try witnessCount()
+        let fakeVKeyBytes = Array(TxBuilder.FAKE_VKEY.payload)
+        let fakeSigBytes = Array(TxBuilder.FAKE_TX_SIGNATURE)
+
+        for i in 0..<witnessCount {
+            // Convert index to 32-byte array (big endian)
             var iBytes = [UInt8](repeating: 0, count: 32)
-            for j in 0..<8 {  // Handle up to 64-bit integer
+            for j in 0..<8 {
                 iBytes[31 - j] = UInt8((i >> (j * 8)) & 0xFF)
             }
 
-            // Create unique verification key by performing AND operation
-            let vkeyBytes = TxBuilder.FAKE_VKEY.payload
-            var uniqueVkeyBytes = [UInt8](repeating: 0, count: 32)
-            for j in 0..<32 {
-                uniqueVkeyBytes[j] = vkeyBytes[j] & iBytes[j]
-            }
-            let uniqueVkey = VKey(payload: Data(uniqueVkeyBytes))
+            // Create a unique vkey by ANDing the fake vkey bytes with iBytes
+            let uniqueVKeyBytes = zip(fakeVKeyBytes, iBytes).map { $0 & $1 }
+            let uniqueVKey = VKey(payload: Data(uniqueVKeyBytes))
 
-            // Create unique signature by performing AND operation with doubled iBytes
-            let sigBytes = TxBuilder.FAKE_TX_SIGNATURE
-            var uniqueSigBytes = [UInt8](repeating: 0, count: 64)
-            let doubledIBytes = iBytes + iBytes  // 64 bytes for signature
-            for j in 0..<64 {
-                uniqueSigBytes[j] = sigBytes[j] & doubledIBytes[j]
-            }
+            // Create a unique signature by ANDing the fake signature bytes with iBytes + iBytes (64 bytes)
+            let doubledIBytes = iBytes + iBytes
+            let uniqueSigBytes = zip(fakeSigBytes, doubledIBytes).map { $0 & $1 }
 
             witnesses.append(
                 VerificationKeyWitness(
-                    vkey: .verificationKey(uniqueVkey),
+                    vkey: .verificationKey(uniqueVKey),
                     signature: Data(uniqueSigBytes)
-                ))
+                )
+            )
         }
+
         return NonEmptyOrderedCBORSet(witnesses)
     }
 
@@ -1535,7 +1591,7 @@ public class TxBuilder {
 
         if let withdrawals = withdrawals {
             for key in withdrawals.data.keys {
-                let address = try Address(from: key)
+                let address = try Address(from: .bytes(key))
                 if address.addressType == .noneKey {
                     if case .verificationKeyHash(let vkeyHash) = address.stakingPart {
                         results.insert(vkeyHash)
@@ -1574,14 +1630,14 @@ public class TxBuilder {
             for script in allScripts {
                 var version = -1
                 switch script {
-                case .plutusV1Script(let plutusScript):
-                    version = plutusScript.version
-                case .plutusV2Script(let plutusScript):
-                    version = plutusScript.version
-                case .plutusV3Script(let plutusScript):
-                    version = plutusScript.version
-                case .nativeScript(_):
-                    version = 1
+                    case .plutusV1Script(let plutusScript):
+                        version = plutusScript.version
+                    case .plutusV2Script(let plutusScript):
+                        version = plutusScript.version
+                    case .plutusV3Script(let plutusScript):
+                        version = plutusScript.version
+                    case .nativeScript(_):
+                        version = 1
                 }
 
                 let protocolParams = try await context.protocolParameters()
@@ -1589,7 +1645,7 @@ public class TxBuilder {
                     costModels[version - 1] = protocolParams.costModels.getVersion(version)
                 }
             }
-            return try SwiftCardanoTxBuilder.scriptDataHash(
+            return try Utils.scriptDataHash(
                 redeemers: try redeemers(),
                 datums: Array(datums.values),
                 costModels: CostModels(costModels)
@@ -1626,7 +1682,7 @@ public class TxBuilder {
                 if let index = sortedMintPolicies.firstIndex(of: try! scriptHash(script: script)) {
                     _mintingScriptToRedeemers = _mintingScriptToRedeemers.map { (s, r) in
                         if s == script {
-                            var newRedeemer = r
+                            let newRedeemer = r
                             newRedeemer?.index = index
                             return (s, newRedeemer)
                         }
@@ -1638,7 +1694,7 @@ public class TxBuilder {
 
         // Set withdrawal redeemer indices
         for (script, redeemer) in _withdrawalScriptToRedeemers {
-            if var redeemer = redeemer {
+            if let redeemer = redeemer {
                 let scriptStakingCredential = try Address(
                     stakingPart: .scriptHash(try! scriptHash(script: script)),
                     network: context.network
@@ -1796,7 +1852,7 @@ public class TxBuilder {
                 collateralChangeAddress: collateralChangeAddress
             )
 
-            for var redeemer in _redeemerList {
+            for redeemer in _redeemerList {
                 guard let tag = redeemer.tag else {
                     throw CardanoTxBuilderError.invalidState(
                         "Expected tag of redeemer to be set, but found nil")
@@ -1847,7 +1903,7 @@ public class TxBuilder {
 
         let witnessSet = try tmpBuilder.buildWitnessSet(removeDupScript: true)
 
-        let tx = Transaction(
+        let tx = Transaction<T>(
             transactionBody: txBody,
             transactionWitnessSet: witnessSet,
             valid: true,
@@ -1919,7 +1975,7 @@ public class TxBuilder {
         }
     }
 
-    private func buildWitnessSet(removeDupScript: Bool = false) throws -> TransactionWitnessSet {
+    private func buildWitnessSet(removeDupScript: Bool = false) throws -> TransactionWitnessSet<T> {
         var nativeScriptElements: [NativeScript] = []
         var plutusV1ScriptElements: [PlutusV1Script] = []
         var plutusV2ScriptElements: [PlutusV2Script] = []

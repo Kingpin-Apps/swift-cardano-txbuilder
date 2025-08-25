@@ -30,7 +30,7 @@ struct TypesTests {
         )
         let mockTransactionOutput = try TransactionOutput(
             address: Address(
-                from: testAddressString
+                from: .string(testAddressString)
             ),
             amount: Value(coin: 1_000_000)
         )
@@ -52,7 +52,7 @@ struct TypesTests {
         )
         let mockTransactionOutput = try TransactionOutput(
             address: Address(
-                from: testAddressString
+                from: .string(testAddressString)
             ),
             amount: Value(coin: 1_000_000)
         )
@@ -73,7 +73,7 @@ struct TypesTests {
     @Test("AddressOrString conversions and type checking")
     func testAddressOrString() async throws {
         
-        let address = try Address(from: testAddressString)
+        let address = try Address(from: .string(testAddressString))
 
         // Test address case
         let addressCase = AddressOrString.address(address)
