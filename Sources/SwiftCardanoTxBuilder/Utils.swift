@@ -68,7 +68,7 @@ public func calculateFee(
     let protocolParameters = try await context.protocolParameters()
     
     let a = ceil(Double(length) * Double(protocolParameters.txFeePerByte))
-    let b = ceil(Double(protocolParameters.txFeePerByte))
+    let b = ceil(Double(protocolParameters.txFeeFixed))
     let c = ceil(Double(execSteps) * Double(protocolParameters.executionUnitPrices.priceSteps))
     let d = ceil(Double(maxMemUnit) * Double(protocolParameters.executionUnitPrices.priceMemory))
     let e = Double(try await tieredReferenceScriptFee(context, scriptsSize: refScriptSize))
@@ -183,28 +183,28 @@ public func minLovelacePostAlonzo(_ output: TransactionOutput, _ context: any Ch
     let protocolParameters = try await context.protocolParameters()
     let constantOverhead: UInt64 = 160
 
-    var amt = output.amount
+    var amount = output.amount
 
     // If the amount of ADA is 0, a default value of 1 ADA will be used
-    if amt.coin == 0 {
-        amt.coin = 1_000_000
+    if amount.coin == 0 {
+        amount = Value(coin: 1_000_000, multiAsset: amount.multiAsset)
     }
-
+    
     // Make sure we are using post-alonzo output
     let tmpOut = TransactionOutput(
         address: output.address,
-        amount: output.amount,
+        amount: amount,
         datumHash: output.datumHash,
         datum: output.datum,
         script: output.script,
         postAlonzo: true
     )
 
-    return (constantOverhead + UInt64(try tmpOut.toCBOR().count))
+    return (constantOverhead + UInt64(try tmpOut.toCBORData().count))
     * UInt64(protocolParameters.utxoCostPerByte)
 }
 
-struct Utils<T: Codable & Hashable> {
+struct Utils<T: CBORSerializable & Hashable> {
     
     /// Calculate plutus script data hash
     ///
@@ -234,10 +234,10 @@ struct Utils<T: Codable & Hashable> {
         if redeemersIsEmpty {
             costModelsBytes = try CBOREncoder().encode(CBOR.map([:]))
         } else if let costModels = costModels {
-            costModelsBytes = try costModels.toCBOR()
+            costModelsBytes = try costModels.toCBORData()
         } else {
             let costModels = try CostModels.forScriptDataHash()
-            costModelsBytes = try costModels.toCBOR()
+            costModelsBytes = try costModels.toCBORData()
         }
         
         if datums.isEmpty {
@@ -246,7 +246,7 @@ struct Utils<T: Codable & Hashable> {
             datumBytes = try CBOREncoder().encode(datums)
         }
         
-        let redeemerBytes = try redeemers?.toCBOR() ?? Data()
+        let redeemerBytes = try redeemers?.toCBORData() ?? Data()
         
         return ScriptDataHash(
             payload: try SwiftNcal.Hash().blake2b(

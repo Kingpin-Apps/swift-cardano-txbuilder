@@ -14,7 +14,7 @@ nonisolated(unsafe) private let address = try! Address(
 private let totalUTxOs = 10
 private var utxos: [UTxO] {
     try! (0..<totalUTxOs).map { i in
-        let txId = TransactionId(payload: Data(repeating: 1, count: 32))
+        let txId = TransactionId(payload: Data(repeating: 0x31, count: 32)) // ASCII "1" = 0x31
         let input = TransactionInput(
             transactionId: txId,
             index: UInt16(i)
@@ -52,7 +52,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext()
+            context: MockChainContext<Never>()
         )
 
         #expect(selected == [utxos[9], utxos[8]])
@@ -70,7 +70,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext()
+            context: MockChainContext<Never>()
         )
 
         #expect(selected == [utxos[9], utxos[8]])
@@ -87,7 +87,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext(),
+            context: MockChainContext<Never>(),
             respectMinUtxo: false
         )
 
@@ -105,7 +105,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext(),
+            context: MockChainContext<Never>(),
             includeMaxFee: false,
             respectMinUtxo: false
         )
@@ -123,7 +123,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext(),
+            context: MockChainContext<Never>(),
             includeMaxFee: false,
             respectMinUtxo: true
         )
@@ -142,7 +142,7 @@ struct LargestFirstSelectorTests {
             _ = try await selector.select(
                 utxos: utxos,
                 outputs: request,
-                context: MockChainContext()
+                context: MockChainContext<Never>()
             )
         }
     }
@@ -158,7 +158,7 @@ struct LargestFirstSelectorTests {
             _ = try await selector.select(
                 utxos: utxos,
                 outputs: request,
-                context: MockChainContext(),
+                context: MockChainContext<Never>(),
                 maxInputCount: 1
             )
         }
@@ -184,7 +184,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext()
+            context: MockChainContext<Never>()
         )
         let expected = Array(utxos.reversed())
 
@@ -195,23 +195,22 @@ struct LargestFirstSelectorTests {
 
 @Suite("RandomImproveMultiAsset Tests")
 struct RandomImproveMultiAssetTests {
-    var selector: RandomImproveMultiAsset {
-        var sequence: [Int] = Array(0..<totalUTxOs).reversed()
-        return RandomImproveMultiAsset(randomGenerator: {
-            return sequence.removeFirst()
-        })
-    }
-
+    
     @Test("RandomImprove - ADA only")
     func testAdaOnly() async throws {
         let request1 = [
             TransactionOutput(address: address, amount: Value(coin: 15_000_000))
         ]
 
-        let (selected1, _) = try await self.selector.select(
+        var sequence1: [Int] = Array(0..<totalUTxOs).reversed()
+        let selector1 = RandomImproveMultiAsset(randomGenerator: {
+            return sequence1.removeFirst()
+        })
+
+        let (selected1, _) = try await selector1.select(
             utxos: utxos,
             outputs: request1,
-            context: MockChainContext()
+            context: MockChainContext<Never>()
         )
 
         let expected = Array(utxos.reversed().prefix(4))
@@ -224,10 +223,15 @@ struct RandomImproveMultiAssetTests {
             TransactionOutput(address: address, amount: Value(coin: 6_000_000)),
         ]
 
-        let (selected2, _) = try await self.selector.select(
+        var sequence2: [Int] = Array(0..<totalUTxOs).reversed()
+        let selector2 = RandomImproveMultiAsset(randomGenerator: {
+            return sequence2.removeFirst()
+        })
+
+        let (selected2, _) = try await selector2.select(
             utxos: utxos,
             outputs: request2,
-            context: MockChainContext()
+            context: MockChainContext<Never>()
         )
 
         #expect(selected2 == expected)
@@ -240,10 +244,15 @@ struct RandomImproveMultiAssetTests {
             TransactionOutput(address: address, amount: Value(coin: 9_000_000))
         ]
 
-        let (selected, _) = try await self.selector.select(
+        var sequence: [Int] = Array(0..<totalUTxOs).reversed()
+        let selector = RandomImproveMultiAsset(randomGenerator: {
+            return sequence.removeFirst()
+        })
+
+        let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext()
+            context: MockChainContext<Never>()
         )
 
         #expect(selected == [utxos[9], utxos[8], utxos[5]])
@@ -256,10 +265,15 @@ struct RandomImproveMultiAssetTests {
             TransactionOutput(address: address, amount: Value(coin: 9_000_000))
         ]
 
-        let (selected, _) = try await self.selector.select(
+        var sequence: [Int] = Array(0..<totalUTxOs).reversed()
+        let selector = RandomImproveMultiAsset(randomGenerator: {
+            return sequence.removeFirst()
+        })
+
+        let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext(),
+            context: MockChainContext<Never>(),
             includeMaxFee: false
         )
 
@@ -281,7 +295,7 @@ struct RandomImproveMultiAssetTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext(),
+            context: MockChainContext<Never>(),
             includeMaxFee: false,
             respectMinUtxo: true
         )
@@ -296,11 +310,16 @@ struct RandomImproveMultiAssetTests {
             TransactionOutput(address: address, amount: Value(coin: 1_000_000_000))
         ]
 
+        var sequence: [Int] = Array(0..<totalUTxOs).reversed()
+        let selector = RandomImproveMultiAsset(randomGenerator: {
+            return sequence.removeFirst()
+        })
+
         await #expect(throws: CardanoTxBuilderError.self) {
-            _ = try await self.selector.select(
+            _ = try await selector.select(
                 utxos: utxos,
                 outputs: request,
-                context: MockChainContext()
+                context: MockChainContext<Never>()
             )
         }
     }
@@ -311,11 +330,16 @@ struct RandomImproveMultiAssetTests {
             TransactionOutput(address: address, amount: Value(coin: 15_000_000))
         ]
 
+        var sequence: [Int] = Array(0..<totalUTxOs).reversed()
+        let selector = RandomImproveMultiAsset(randomGenerator: {
+            return sequence.removeFirst()
+        })
+
         await #expect(throws: CardanoTxBuilderError.self) {
-            _ = try await self.selector.select(
+            _ = try await selector.select(
                 utxos: utxos,
                 outputs: request,
-                context: MockChainContext(),
+                context: MockChainContext<Never>(),
                 maxInputCount: 1
             )
         }
@@ -346,7 +370,7 @@ struct RandomImproveMultiAssetTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext()
+            context: MockChainContext<Never>()
         )
 
         #expect(selected == [utxos[9], utxos[8], utxos[3], utxos[7], utxos[0]])

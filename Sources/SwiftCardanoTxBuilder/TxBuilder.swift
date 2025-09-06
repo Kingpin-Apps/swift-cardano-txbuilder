@@ -1,17 +1,19 @@
 import Foundation
 import Logging
-import OrderedCollections
 import SwiftCardanoChain
 import SwiftCardanoCore
 
-let logger = Logger(label: "com.swift-cardano-txbuilder")
+//let logger = Logger(label: "com.swift-cardano-txbuilder")
 
 /// A class builder that makes it easy to build a transaction.
-public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == Context.ReedemerType {
-    // MARK: - Constants
+public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable where T == Context.ReedemerType {
+    // MARK: - Loggable Conformance
+    public var logger: Logging.Logger
 
-    private static var FAKE_VKEY: any VerificationKey {
-        VKey(
+    // MARK: - Constants
+    /// A fake verification key for fee calculation purpose only
+    private static var FAKE_VKEY: any VerificationKeyProtocol {
+        VerificationKey(
             payload: Data(
                 hex: "5797dc2cc919dfec0bb849551ebdf30d96e5cbe0f33f734a87fe826db30f7ef9"
             )
@@ -86,13 +88,27 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
     public private(set) var votingProcedures: VotingProcedures?
 
     /// Proposal procedures for the transaction
-    public private(set) var proposalProcedures: NonEmptyCBORSet<ProposalProcedure>?
+    public private(
+        set
+    ) var proposalProcedures: NonEmptyOrderedSet<ProposalProcedure>?
 
     /// Current treasury value
     public private(set) var currentTreasuryValue: Int?
 
     /// Donation amount
     public private(set) var donation: Int?
+    
+    /// Inputs to scripts mapping
+    public var inputsToScripts: [UTxO: ScriptType] {
+        get { _inputsToScripts }
+        set { _inputsToScripts = newValue }
+    }
+    
+    /// Inputs to scripts mapping
+    public var redeemerListOverride: [Redeemer<T>] {
+        get { _redeemers }
+        set { _redeemers = newValue }
+    }
 
     // MARK: - Private Properties
 
@@ -105,6 +121,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
     private var _datums: [DatumHash: Datum] = [:]
     private var _collateralReturn: TransactionOutput?
     private var _totalCollateral: Int?
+    private var _redeemers: [Redeemer<T>] = []
     private var _inputsToRedeemers: [UTxO: Redeemer<T>] = [:]
     private var _mintingScriptToRedeemers: [(ScriptType, Redeemer<T>?)] = []
     private var _withdrawalScriptToRedeemers: [(ScriptType, Redeemer<T>?)] = []
@@ -113,7 +130,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
     private var _referenceScripts: [ScriptType] = []
     private var _shouldEstimateExecutionUnits: Bool?
 
-    /// The minimum amount of lovelace above which the remaining collateral will be returned
+    /// The minimum amount of lovelace above which the remaining collateral  (total_collateral_amount - actually_used_amount)  will be returned
     public var collateralReturnThreshold: Int = 1_000_000
 
     // MARK: - Initialization
@@ -134,6 +151,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
                 collaterals: [UTxO] = [],
                 certificates: [Certificate]? = nil,
                 withdrawals: Withdrawals? = nil,
+                collateralReturnThreshold: Int? = nil,
     ) {
         self.context = context
         self.utxoSelectors = utxoSelectors
@@ -147,8 +165,11 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         self.mint = mint
         self.requiredSigners = requiredSigners
         self.collaterals = collaterals
+        self.collateralReturnThreshold = collateralReturnThreshold ?? 1_000_000
         self.certificates = certificates
         self.withdrawals = withdrawals
+        
+        self.logger = Logger(label: "com.swift-cardano-txbuilder")
         setupLogging()
     }
 
@@ -178,8 +199,8 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         redeemer: Redeemer<T>? = nil
     ) async throws -> TxBuilder {
         guard
-            String(describing: type(of: utxo.output.address.addressType))
-                .hasPrefix("script")
+            case let addressType = utxo.output.address.addressType,
+            addressType == .scriptKey || addressType == .scriptScript || addressType == .scriptPointer || addressType == .scriptNone
         else {
             throw CardanoTxBuilderError.invalidInput(
                 "Expect the output address of utxo to be script type, but got \(String(describing: utxo.output.address.addressType)) instead."
@@ -232,6 +253,14 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         if let outputScript = utxo.output.script {
             candidateScripts.append((outputScript, utxo))
         } else if script == nil {
+            // First, check potential inputs for scripts
+            for i in potentialInputs {
+                if let script = i.output.script {
+                    candidateScripts.append((script, i))
+                }
+            }
+            
+            // Then, check chain context UTxOs for scripts
             let utxos = try await context.utxos(address: utxo.output.address)
             for i in utxos {
                 if let script = i.output.script {
@@ -434,16 +463,133 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         return self
     }
 
+    /// Build the transaction witness set.
+    public func buildWitnessSet(removeDupScript: Bool = false) throws -> TransactionWitnessSet<T> {
+        var nativeScriptElements: [NativeScript] = []
+        var plutusV1ScriptElements: [PlutusV1Script] = []
+        var plutusV2ScriptElements: [PlutusV2Script] = []
+        var plutusV3ScriptElements: [PlutusV3Script] = []
+
+        let inputScripts: OrderedSet<ScriptHash>
+        if removeDupScript {
+            inputScripts = try OrderedSet(
+                Set(
+                    inputs.compactMap { input in
+                        if let script = input.output.script {
+                            return try? scriptHash(script: script)
+                        }
+                        return nil
+                    }))
+        } else {
+            inputScripts = try OrderedSet<ScriptHash>([])
+        }
+
+        for script in scripts {
+            let scriptHash = try scriptHash(script: script)
+            if !inputScripts.contains(scriptHash) {
+                switch script {
+                case .nativeScript(let nativeScript):
+                    nativeScriptElements.append(nativeScript)
+                case .plutusV1Script(let plutusScript):
+                    plutusV1ScriptElements.append(plutusScript)
+                case .plutusV2Script(let plutusScript):
+                    plutusV2ScriptElements.append(plutusScript)
+                case .plutusV3Script(let plutusScript):
+                    plutusV3ScriptElements.append(plutusScript)
+                }
+            }
+        }
+
+        return TransactionWitnessSet(
+            vkeyWitnesses: nil,
+            nativeScripts: nativeScriptElements.isEmpty
+                ? nil
+            : .nonEmptyOrderedSet(NonEmptyOrderedSet<NativeScript>(
+                    nativeScriptElements
+                )),
+            bootstrapWitness: nil,
+            plutusV1Script: plutusV1ScriptElements.isEmpty
+                ? nil
+            : .nonEmptyOrderedSet(NonEmptyOrderedSet<PlutusV1Script>(
+                    plutusV1ScriptElements
+                )),
+            plutusV2Script: plutusV2ScriptElements.isEmpty
+                ? nil
+                : .nonEmptyOrderedSet(NonEmptyOrderedSet<PlutusV2Script>(
+                    plutusV2ScriptElements
+                )),
+            plutusData: datums.isEmpty
+                ? nil
+                : .nonEmptyOrderedSet(NonEmptyOrderedSet<RawPlutusData>(
+                    try datums.values
+                        .map { RawPlutusData(data: try $0.toRawDatum()) }
+                )),
+            redeemers: try _redeemerList.isEmpty ? nil : redeemers(),
+            plutusV3Script: plutusV3ScriptElements.isEmpty
+                ? nil : .nonEmptyOrderedSet(NonEmptyOrderedSet<PlutusV3Script>(plutusV3ScriptElements))
+        )
+    }
+    
+    public func copy() -> TxBuilder {
+        let copy = TxBuilder<T, Context>.init(
+            context: self.context,
+            utxoSelectors: self.utxoSelectors,
+            executionMemoryBuffer: self.executionMemoryBuffer,
+            executionStepBuffer: self.executionStepBuffer,
+            feeBuffer: self.feeBuffer,
+            ttl: self.ttl,
+            validityStart: self.validityStart,
+            auxiliaryData: self.auxiliaryData,
+            nativeScripts: self.nativeScripts,
+            mint: self.mint,
+            requiredSigners: self.requiredSigners,
+            collaterals: self.collaterals,
+            certificates: self.certificates,
+            withdrawals: self.withdrawals,
+            collateralReturnThreshold: self.collateralReturnThreshold,
+        )
+        
+        // Copy private state
+        copy._inputs = self._inputs
+        copy._potentialInputs = self._potentialInputs
+        copy._excludedInputs = self._excludedInputs
+        copy._inputAddresses = self._inputAddresses
+        copy._outputs = self._outputs
+        copy._fee = self._fee
+        copy._datums = self._datums
+        copy._collateralReturn = self._collateralReturn
+        copy._totalCollateral = self._totalCollateral
+        copy._inputsToRedeemers = self._inputsToRedeemers
+        copy._mintingScriptToRedeemers = self._mintingScriptToRedeemers
+        copy._withdrawalScriptToRedeemers = self._withdrawalScriptToRedeemers
+        copy._certificateScriptToRedeemers = self._certificateScriptToRedeemers
+        copy._inputsToScripts = self._inputsToScripts
+        copy._referenceScripts = self._referenceScripts
+        copy._shouldEstimateExecutionUnits = self._shouldEstimateExecutionUnits
+        copy.referenceInputs = self.referenceInputs
+        copy.votingProcedures = self.votingProcedures
+        copy.proposalProcedures = self.proposalProcedures
+        copy.currentTreasuryValue = self.currentTreasuryValue
+        copy.donation = self.donation
+        copy.witnessOverride = self.witnessOverride
+        copy.initialStakePoolRegistration = self.initialStakePoolRegistration
+        copy.useRedeemerMap = self.useRedeemerMap
+        
+        return copy
+    }
+
     // MARK: - Public Properties
 
     /// The transaction inputs
     public var inputs: [UTxO] {
-        _inputs
+        get { _inputs }
+        set { _inputs = newValue }
     }
 
     /// The potential inputs that may be used
     public var potentialInputs: [UTxO] {
-        _potentialInputs
+        get { _potentialInputs }
+        set { _potentialInputs = newValue }
     }
 
     /// The excluded inputs that should not be used
@@ -454,12 +600,14 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
 
     /// The input addresses to select UTxOs from
     public var inputAddresses: [AddressOrString] {
-        _inputAddresses
+        get { _inputAddresses }
+        set { _inputAddresses = newValue }
     }
 
     /// The transaction outputs
     public var outputs: [TransactionOutput] {
-        _outputs
+        get { _outputs }
+        set { _outputs = newValue }
     }
 
     /// The transaction fee
@@ -526,6 +674,10 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
 
     /// The redeemers used in the transaction
     private var _redeemerList: [Redeemer<T>] {
+        if self.redeemerListOverride.count > 0 {
+            return self.redeemerListOverride
+        }
+        
         var redeemers: [Redeemer<T>] = []
 
         redeemers += _inputsToRedeemers.values.map { $0 }
@@ -535,6 +687,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
 
         redeemers.sort { $0.index < $1.index }
         return redeemers
+        
     }
 
     /// Get the redeemers for the transaction
@@ -583,11 +736,11 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         anchor: Anchor? = nil
     ) -> TxBuilder {
         if votingProcedures == nil {
-            votingProcedures = [:]
+            votingProcedures = VotingProcedures([:])
         }
 
         // Initialize the inner map if this is the first vote for this voter
-        if votingProcedures!.contains(where: { $0.key == voter }) {
+        if votingProcedures!.voters.contains(where: { $0 == voter }) {
             votingProcedures![voter] = [:]
         }
 
@@ -620,7 +773,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         )
 
         if proposalProcedures == nil {
-            proposalProcedures = NonEmptyCBORSet([procedure])
+            proposalProcedures = NonEmptyOrderedSet([procedure])
         } else {
             proposalProcedures?.elements.insert(procedure)
         }
@@ -661,238 +814,253 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         autoTtlOffset: Int? = nil,
         autoRequiredSigners: Bool? = nil
     ) async throws -> TransactionBody {
-        try ensureNoInputExclusionConflict()
+        do {
+            try ensureNoInputExclusionConflict()
 
-        // Only automatically set the validity interval and required signers if scripts are involved
-        let isSmart = !allScripts.isEmpty
+            // Only automatically set the validity interval and required signers if scripts are involved
+            let isSmart = !allScripts.isEmpty
 
-        // Automatically set the validity range to a tight value around transaction creation
-        if (isSmart || autoValidityStartOffset != nil) && validityStart == nil {
-            let lastSlot = try await context.lastBlockSlot()
-            // If None is provided, the default value is -1000
-            let offset = autoValidityStartOffset ?? -1000
-            validityStart = max(0, lastSlot + offset)
-        }
+            // Automatically set the validity range to a tight value around transaction creation
+            if (isSmart || autoValidityStartOffset != nil) && validityStart == nil {
+                let lastSlot = try await context.lastBlockSlot()
+                // If None is provided, the default value is -1000
+                let offset = autoValidityStartOffset ?? -1000
+                validityStart = max(0, lastSlot + offset)
+            }
 
-        if (isSmart || autoTtlOffset != nil) && ttl == nil {
-            let lastSlot = try await context.lastBlockSlot()
-            // If None is provided, the default value is 10_000
-            let offset = autoTtlOffset ?? 10_000
-            ttl = max(0, lastSlot + offset)
-        }
+            if (isSmart || autoTtlOffset != nil) && ttl == nil {
+                let lastSlot = try await context.lastBlockSlot()
+                // If None is provided, the default value is 10_000
+                let offset = autoTtlOffset ?? 10_000
+                ttl = max(0, lastSlot + offset)
+            }
 
-        var selectedUtxos: [UTxO] = []
-        var selectedAmount = Value()
+            var selectedUtxos: [UTxO] = []
+            var selectedAmount = Value()
 
-        for input in inputs {
-            selectedUtxos.append(input)
-            selectedAmount += input.output.amount
-        }
+            for input in inputs {
+                selectedUtxos.append(input)
+                selectedAmount += input.output.amount
+            }
 
-        if let mint = mint {
-            // Add positive minted amounts to the selected amount (=source)
-            for (pid, m) in mint.data {
-                for (tkn, am) in m.data {
-                    if am > 0 {
-                        selectedAmount += Value(
-                            multiAsset: MultiAsset([pid: Asset([tkn: am])])
-                        )
+            if let mint = mint {
+                // Add positive minted amounts to the selected amount (=source)
+                for (pid, m) in mint.data {
+                    for (tkn, am) in m.data {
+                        if am > 0 {
+                            selectedAmount += Value(
+                                multiAsset: MultiAsset([pid: Asset([tkn: am])])
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        if let withdrawals = withdrawals {
-            for withdrawal in withdrawals.data.values {
-                selectedAmount.coin += Int(withdrawal)
+            if let withdrawals = withdrawals {
+                for withdrawal in withdrawals.data.values {
+                    selectedAmount.coin += Int(withdrawal)
+                }
             }
-        }
 
-        var canMergeChange = false
-        if mergeChange {
+            var canMergeChange = false
+            if mergeChange {
+                for output in outputs {
+                    if output.address == changeAddress {
+                        canMergeChange = true
+                        break
+                    }
+                }
+            }
+
+            selectedAmount.coin -= try await getTotalKeyDeposit()
+            selectedAmount.coin -= getTotalProposalDeposit()
+
+            var requestedAmount = Value()
             for output in outputs {
-                if output.address == changeAddress {
-                    canMergeChange = true
-                    break
-                }
+                requestedAmount += output.amount
             }
-        }
 
-        selectedAmount.coin -= try await getTotalKeyDeposit()
-        selectedAmount.coin -= getTotalProposalDeposit()
-
-        var requestedAmount = Value()
-        for output in outputs {
-            requestedAmount += output.amount
-        }
-
-        if let mint = mint {
-            // Add negative minted amounts to the requested amount (=sink)
-            for (pid, m) in mint.data {
-                for (tkn, am) in m.data {
-                    if am < 0 {
-                        requestedAmount += Value(
-                            multiAsset: MultiAsset([pid: Asset([tkn: -am])])
-                        )
+            if let mint = mint {
+                // Add negative minted amounts to the requested amount (=sink)
+                for (pid, m) in mint.data {
+                    for (tkn, am) in m.data {
+                        if am < 0 {
+                            requestedAmount += Value(
+                                multiAsset: MultiAsset([pid: Asset([tkn: -am])])
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // Include min fees associated as part of requested amount
-        await requestedAmount.coin += try estimateFee()
+            // Include min fees associated as part of requested amount
+            await requestedAmount.coin += try estimateFee()
 
-        // Trim off assets that are not requested because they will be returned as changes eventually
-        var trimmedSelectedAmount = Value(coin: selectedAmount.coin)
-        trimmedSelectedAmount.multiAsset = try selectedAmount.multiAsset
-            .filter { pid, name, _ in
-                requestedAmount.multiAsset[pid]?[name] != nil
-            }
-        if !selectedAmount.multiAsset.isEmpty {
+            // Trim off assets that are not requested because they will be returned as changes eventually
+            var trimmedSelectedAmount = Value(coin: selectedAmount.coin)
             trimmedSelectedAmount.multiAsset = try selectedAmount.multiAsset
                 .filter { pid, name, _ in
                     requestedAmount.multiAsset[pid]?[name] != nil
                 }
-        }
-
-        var unfulfilledAmount = requestedAmount - trimmedSelectedAmount
-
-        if let changeAddress = changeAddress,
-            !canMergeChange
-        {
-            // If change address is provided and remainder is smaller than minimum ADA required in change,
-            // we need to select additional UTxOs available from the address
-            if unfulfilledAmount.coin < 0 {
-                let minLovelace = try await minLovelacePostAlonzo(
-                    TransactionOutput(
-                        address: changeAddress,
-                        amount: selectedAmount - trimmedSelectedAmount
-                    ),
-                    context
-                )
-                unfulfilledAmount.coin = max(
-                    0,
-                    unfulfilledAmount.coin + Int(minLovelace)
-                )
-            }
-        } else {
-            unfulfilledAmount.coin = max(0, unfulfilledAmount.coin)
-        }
-
-        if unfulfilledAmount.multiAsset.isEmpty {
-            unfulfilledAmount.multiAsset = try unfulfilledAmount.multiAsset
-                .filter { _, _, value in value > 0 }
-        }
-
-        // Create a set of all seen utxos in addition to other utxo lists.
-        // We need this set to avoid adding the same utxo twice.
-        // The reason of not turning all utxo lists into sets is that we want to keep the order of utxos and make
-        // utxo selection deterministic.
-        var seenUtxos = Set(selectedUtxos)
-
-        // When there are positive coin or native asset quantity in unfulfilled Value
-        if Value() < unfulfilledAmount {
-            var additionalUtxoPool: [UTxO] = []
-            var additionalAmount = Value()
-
-            for utxo in potentialInputs {
-                additionalAmount += utxo.output.amount
-                seenUtxos.insert(utxo)
-                additionalUtxoPool.append(utxo)
-            }
-
-            for address in inputAddresses {
-                let utxos = try await context.utxos(address: address.asAddress!)
-                for utxo in utxos {
-                    if !seenUtxos.contains(utxo) && !excludedInputs.contains(utxo) {
-                        additionalUtxoPool.append(utxo)
-                        additionalAmount += utxo.output.amount
-                        seenUtxos.insert(utxo)
+            if !selectedAmount.multiAsset.isEmpty {
+                trimmedSelectedAmount.multiAsset = try selectedAmount.multiAsset
+                    .filter { pid, name, _ in
+                        requestedAmount.multiAsset[pid]?[name] != nil
                     }
-                }
             }
 
-            for (index, selector) in utxoSelectors.enumerated() {
-                do {
-                    let (selected, _) = try await selector.select(
-                        utxos: additionalUtxoPool,
-                        outputs: [
-                            TransactionOutput(
-                                address: Address(paymentPart: .verificationKeyHash(TxBuilder.FAKE_VKEY.hash())),
-                                amount: unfulfilledAmount
-                            )
-                        ],
-                        context: context,
-                        maxInputCount: nil,
-                        includeMaxFee: false,
-                        respectMinUtxo: !canMergeChange
+            var unfulfilledAmount = requestedAmount - trimmedSelectedAmount
+
+            if let changeAddress = changeAddress,
+                !canMergeChange
+            {
+                // If change address is provided and remainder is smaller than minimum ADA required in change,
+                // we need to select additional UTxOs available from the address
+                if unfulfilledAmount.coin < 0 {
+                    let minLovelace = try await minLovelacePostAlonzo(
+                        TransactionOutput(
+                            address: changeAddress,
+                            amount: selectedAmount - trimmedSelectedAmount
+                        ),
+                        context
                     )
+                    unfulfilledAmount.coin = max(
+                        0,
+                        unfulfilledAmount.coin + Int(minLovelace)
+                    )
+                }
+            } else {
+                unfulfilledAmount.coin = max(0, unfulfilledAmount.coin)
+            }
 
-                    for s in selected {
-                        selectedAmount += s.output.amount
-                        selectedUtxos.append(s)
+            if !unfulfilledAmount.multiAsset.isEmpty {
+                unfulfilledAmount.multiAsset = try unfulfilledAmount.multiAsset
+                    .filter { _, _, value in value > 0 }
+            }
+
+            // Create a set of all seen utxos in addition to other utxo lists.
+            // We need this set to avoid adding the same utxo twice.
+            // The reason of not turning all utxo lists into sets is that we want to keep the order of utxos and make
+            // utxo selection deterministic.
+            var seenUtxos = Set(selectedUtxos)
+
+            // When there are positive coin or native asset quantity in unfulfilled Value
+            // Check if we need additional UTxOs - either for ADA or multi-assets
+            let needsAdditionalUtxos = unfulfilledAmount.coin > 0 || !unfulfilledAmount.multiAsset.isEmpty
+            
+            if needsAdditionalUtxos {
+                var additionalUtxoPool: [UTxO] = []
+                var additionalAmount = Value()
+
+                for utxo in potentialInputs {
+                    additionalAmount += utxo.output.amount
+                    seenUtxos.insert(utxo)
+                    additionalUtxoPool.append(utxo)
+                }
+
+                for address in inputAddresses {
+                    let utxos = try await context.utxos(address: address.asAddress!)
+                    for utxo in utxos {
+                        if !seenUtxos.contains(utxo) && !excludedInputs.contains(utxo) {
+                            additionalUtxoPool.append(utxo)
+                            additionalAmount += utxo.output.amount
+                            seenUtxos.insert(utxo)
+                        }
                     }
+                }
 
-                    break
-                } catch {
-                    if index < utxoSelectors.count - 1 {
-                        logger.info("\(error)")
-                        logger.info("\(selector) failed. Trying next selector.")
-                    } else {
-                        var trimmedAdditionalAmount = Value(coin: additionalAmount.coin)
-                        if !additionalAmount.multiAsset.isEmpty {
-                            trimmedAdditionalAmount.multiAsset = try additionalAmount.multiAsset
-                                .filter { pid, name, _ in
-                                    requestedAmount.multiAsset[pid]?[name] != nil
-                                }
-                        }
-
-                        var diff = requestedAmount - trimmedSelectedAmount - trimmedAdditionalAmount
-                        if !diff.multiAsset.isEmpty {
-                            diff.multiAsset = try diff.multiAsset
-                                .filter { _, _, value in value > 0 }
-                        }
-
-                        throw CardanoTxBuilderError.utxoSelectionFailed(
-                            "All UTxO selectors failed.\n"
-                                + "Requested output:\n \(requestedAmount) \n"
-                                + "Pre-selected inputs:\n \(selectedAmount) \n"
-                                + "Additional UTxO pool:\n \(additionalUtxoPool) \n"
-                                + "Unfulfilled amount:\n \(diff)"
+                for (index, selector) in utxoSelectors.enumerated() {
+                    do {
+                        let (selected, _) = try await selector.select(
+                            utxos: additionalUtxoPool,
+                            outputs: [
+                                TransactionOutput(
+                                    address: Address(paymentPart: .verificationKeyHash(TxBuilder.FAKE_VKEY.hash())),
+                                    amount: unfulfilledAmount
+                                )
+                            ],
+                            context: context,
+                            maxInputCount: nil,
+                            includeMaxFee: false,
+                            respectMinUtxo: !mergeChange
                         )
+
+                        for s in selected {
+                            selectedAmount += s.output.amount
+                            selectedUtxos.append(s)
+                        }
+                        
+                        break // Break out of the loop after successful selection
+                    }
+                    catch {
+                        if index < utxoSelectors.count - 1 {
+                            logger.info("\(error)")
+                            logger.info("\(selector) failed. Trying next selector.")
+                            continue
+                        } else {
+                            var trimmedAdditionalAmount = Value(coin: additionalAmount.coin)
+                            if !additionalAmount.multiAsset.isEmpty {
+                                trimmedAdditionalAmount.multiAsset = try additionalAmount.multiAsset
+                                    .filter { pid, name, _ in
+                                        requestedAmount.multiAsset[pid]?[name] != nil
+                                    }
+                            }
+
+                            var diff = requestedAmount - trimmedSelectedAmount - trimmedAdditionalAmount
+                            if !diff.multiAsset.isEmpty {
+                                diff.multiAsset = try diff.multiAsset
+                                    .filter { _, _, value in value > 0 }
+                            }
+
+                            throw CardanoTxBuilderError.utxoSelectionFailed(
+                                "All UTxO selectors failed.\n"
+                                    + "Requested output:\n \(requestedAmount) \n"
+                                    + "Pre-selected inputs:\n \(selectedAmount) \n"
+                                    + "Additional UTxO pool:\n \(additionalUtxoPool) \n"
+                                    + "Unfulfilled amount:\n \(diff)"
+                            )
+                        }
                     }
                 }
             }
+
+            selectedUtxos.sort { a, b in
+                let aId = a.input.transactionId.description
+                let bId = b.input.transactionId.description
+                return aId == bId ? a.input.index < b.input.index : aId < bId
+            }
+
+            _inputs = selectedUtxos
+
+            // Automatically set the required signers for smart transactions
+            if (isSmart && autoRequiredSigners != false) && requiredSigners == nil {
+                // Collect all signatories from explicitly defined
+                // transaction inputs and collateral inputs, and input addresses
+                requiredSigners = Array(inputVkeyHashes())
+            }
+
+            try setRedeemerIndex()
+
+            try await setCollateralReturn(collateralChangeAddress ?? changeAddress)
+
+            try await updateExecutionUnits(
+                changeAddress: changeAddress,
+                mergeChange: mergeChange,
+                collateralChangeAddress: collateralChangeAddress
+            )
+
+            try await addChangeAndFee(changeAddress: changeAddress, mergeChange: mergeChange)
+            
+            let txBody = try await buildTxBody()
+            
+            logState(logLevel: .debug)
+
+            return txBody
         }
-
-        selectedUtxos.sort { a, b in
-            let aId = a.input.transactionId.description
-            let bId = b.input.transactionId.description
-            return aId == bId ? a.input.index < b.input.index : aId < bId
+        catch {
+            logState(logLevel: .warning)
+            throw error
         }
-
-        _inputs = selectedUtxos
-
-        // Automatically set the required signers for smart transactions
-        if (isSmart && autoRequiredSigners != false) && requiredSigners == nil {
-            // Collect all signatories from explicitly defined
-            // transaction inputs and collateral inputs, and input addresses
-            requiredSigners = Array(inputVkeyHashes())
-        }
-
-        try setRedeemerIndex()
-
-        try await setCollateralReturn(collateralChangeAddress ?? changeAddress)
-
-        try await updateExecutionUnits(
-            changeAddress: changeAddress,
-            mergeChange: mergeChange,
-            collateralChangeAddress: collateralChangeAddress
-        )
-
-        try await addChangeAndFee(changeAddress: changeAddress, mergeChange: mergeChange)
-
-        return try await buildTxBody()
     }
 
     /// Build a transaction body and sign it with the provided signing keys.
@@ -941,7 +1109,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         let requiredVkeys = try buildRequiredVkeys()
 
         for signingKey in Set(signingKeys) {
-            let vkey: any VerificationKey = try signingKey.toVerificationKey()
+            let vkey: any VerificationKeyProtocol = try signingKey.toVerificationKey()
             let vkeyHash: VerificationKeyHash = try vkey.hash()
             let vkeyType: VerificationKeyType = try signingKey.toVerificationKeyType()
 
@@ -963,7 +1131,8 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         if vkeyWitnesses.isEmpty == true {
             witnessSet.vkeyWitnesses = nil
         } else {
-            witnessSet.vkeyWitnesses = NonEmptyOrderedCBORSet(vkeyWitnesses)
+            witnessSet.vkeyWitnesses =
+                .nonEmptyOrderedSet(NonEmptyOrderedSet(vkeyWitnesses))
         }
 
         return Transaction(
@@ -1092,8 +1261,8 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
                     TransactionOutput(address: address, amount: change),
                     context
                 )
-                guard change.coin >= minLovelace else {
-                    throw CardanoTxBuilderError.insufficientBalance(
+                guard change.coin > minLovelace else {
+                    throw CardanoTxBuilderError.insufficientUTxOBalance(
                         "Not enough ADA left for change: \(change.coin) but needs \(minLovelace)"
                     )
                 }
@@ -1113,7 +1282,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
             )
 
             // Include minimum lovelace into each token output except for the last one
-            for (i, multiAsset) in change.multiAsset.data.enumerated() {
+            for (i, multiAsset) in multiAssetArray.enumerated() {
                 // Combine remainder of provided ADA with last MultiAsset for output
                 // There may be rare cases where adding ADA causes size exceeds limit
                 // We will revisit if it becomes an issue
@@ -1122,11 +1291,12 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
                         TransactionOutput(
                             address: address,
                             amount: Value(
-                                coin: 0, multiAsset: MultiAsset([multiAsset.key: multiAsset.value]))
+                                coin: 0, multiAsset: multiAsset)
                         ),
                         context
                     )
-                    guard change.coin >= minLovelace else {
+                    
+                    guard change.coin > minLovelace else {
                         throw CardanoTxBuilderError.insufficientBalance(
                             "Not enough ADA left to cover non-ADA assets in a change address"
                         )
@@ -1138,12 +1308,12 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
                     // Include all ada in last output
                     changeValue = Value(
                         coin: change.coin,
-                        multiAsset: MultiAsset([multiAsset.key: multiAsset.value])
+                        multiAsset: multiAsset
                     )
                 } else {
                     changeValue = Value(
                         coin: 0,
-                        multiAsset: MultiAsset([multiAsset.key: multiAsset.value])
+                        multiAsset: multiAsset
                     )
                     changeValue.coin = Int(
                         try await minLovelacePostAlonzo(
@@ -1177,28 +1347,27 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
 
         if let certificates = certificates {
             for cert in certificates {
-
                 switch cert {
-                case .stakeRegistration(let reg):
-                    stakeRegistrationCerts.insert(
-                        Credential(credential: reg.stakeCredential.credential)
-                    )
-                case .registerDRep(let reg):
-                    stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
-                case .register(let reg):
-                    stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
-                case .stakeRegisterDelegate(let reg):
-                    stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
-                case .voteRegisterDelegate(let reg):
-                    stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
-                case .stakeVoteRegisterDelegate(let reg):
-                    stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
-                case .poolRegistration(let poolReg):
-                    if initialStakePoolRegistration {
-                        stakePoolRegistrationCerts.insert(poolReg.poolParams.poolOperator)
-                    }
-                default:
-                    break
+                    case .stakeRegistration(let reg):
+                        stakeRegistrationCerts.insert(
+                            Credential(credential: reg.stakeCredential.credential)
+                        )
+                    case .registerDRep(let reg):
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                    case .register(let reg):
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                    case .stakeRegisterDelegate(let reg):
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                    case .voteRegisterDelegate(let reg):
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                    case .stakeVoteRegisterDelegate(let reg):
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                    case .poolRegistration(let poolReg):
+                        if initialStakePoolRegistration {
+                            stakePoolRegistrationCerts.insert(poolReg.poolParams.poolOperator)
+                        }
+                    default:
+                        break
                 }
             }
         }
@@ -1240,7 +1409,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         )
         attemptAmount.coin = Int(requiredLovelace)
 
-        return try attemptAmount.toCBOR().count > maxValSize
+        return try attemptAmount.toCBORData().count > maxValSize
     }
 
     private func packTokensForChange(
@@ -1304,7 +1473,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
                 )
                 updatedAmount.coin = Int(requiredLovelace)
 
-                if try updatedAmount.toCBOR().count > maxValSize {
+                if try updatedAmount.toCBORData().count > maxValSize {
                     output.amount = oldAmount
                     break
                 }
@@ -1332,10 +1501,14 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
     private func refScriptSize() throws -> Int {
         try _referenceScripts.reduce(into: 0) { size, script in
             switch script {
-            case .nativeScript(let script):
-                size += try script.toCBOR().count
-            default:
-                size += try script.toCBOR().count
+                case .nativeScript(let script):
+                    size += try script.toCBORData().count
+                case .plutusV1Script(let script):
+                    size += script.data.count
+                case .plutusV2Script(let script):
+                    size += script.data.count
+                case .plutusV3Script(let script):
+                    size += script.data.count
             }
         }
     }
@@ -1348,24 +1521,37 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
             }
         }
 
-        let estimatedFee = try await calculateFee(
+        var estimatedFee = try await calculateFee(
             context,
-            length: UInt64(buildFullFakeTx().toCBOR().count),
+            length: UInt64(buildFullFakeTx().toCBORData().count),
             execSteps: UInt64(plutusExecutionUnits.steps),
             maxMemUnit: UInt64(plutusExecutionUnits.mem),
             refScriptSize: UInt64(refScriptSize())
         )
-        return Int(feeBuffer.map { estimatedFee + UInt64($0) } ?? estimatedFee)
+        
+        if feeBuffer != nil {
+            estimatedFee += UInt64(feeBuffer!)
+        }
+        
+        return Int(estimatedFee)
     }
 
     private func buildTxBody() async throws -> TransactionBody {
         let txBody = TransactionBody(
-            inputs: CBORSet<TransactionInput>(Set(inputs.map { $0.input })),
+            inputs:
+                    .orderedSet(
+                        try OrderedSet<TransactionInput>(
+                            Set(inputs.map { $0.input })
+                        )
+                    ),
             outputs: outputs,
             fee: Coin(fee),
             ttl: ttl,
-            certificates: certificates == nil || certificates!.isEmpty
-                ? nil : NonEmptyCBORSet<Certificate>(certificates!),
+//            certificates: certificates == nil || certificates!.isEmpty
+//            ? nil : .nonEmptyOrderedSet(
+//                NonEmptyOrderedSet<Certificate>(certificates!)
+//            ),
+            certificates: certificates == nil || certificates!.isEmpty ? nil : .list(certificates!),
             withdrawals: withdrawals,
             update: nil,
             auxiliaryDataHash: try auxiliaryData?.hash(),
@@ -1373,21 +1559,25 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
             mint: mint,
             scriptDataHash: try await scriptDataHash(),
             collateral: collaterals.isEmpty
-                ? nil : NonEmptyCBORSet<TransactionInput>(collaterals.map { $0.input }),
+            ? nil : .nonEmptyOrderedSet(
+                NonEmptyOrderedSet<TransactionInput>(
+                    collaterals.map { $0.input
+                    })
+            ),
             requiredSigners: requiredSigners == nil || requiredSigners!.isEmpty
-                ? nil : NonEmptyCBORSet(requiredSigners!),
+            ? nil : .nonEmptyOrderedSet(NonEmptyOrderedSet(requiredSigners!)),
             collateralReturn: _collateralReturn,
             totalCollateral: _totalCollateral == nil ? nil : Coin(_totalCollateral!),
             referenceInputs: referenceInputs.isEmpty
                 ? nil
-                : NonEmptyCBORSet<TransactionInput>(
+            : .nonEmptyOrderedSet(NonEmptyOrderedSet<TransactionInput>(
                     referenceInputs.map { input in
                         switch input {
                         case .utxo(let utxo): return utxo.input
                         case .input(let input): return input
                         }
                     }
-                ),
+                )),
             votingProcedures: votingProcedures == nil ? nil : votingProcedures!,
             proposalProcedures: proposalProcedures == nil ? nil : proposalProcedures!,
             currentTreasuryAmount: currentTreasuryValue == nil ? nil : Coin(currentTreasuryValue!),
@@ -1418,10 +1608,12 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         )
 
         let protocolParameters = try await context.protocolParameters()
+        
+        let size = try tx.toCBORData().count
 
-        if try tx.toCBOR().count > protocolParameters.maxTxSize {
+        if size > protocolParameters.maxTxSize {
             throw CardanoTxBuilderError.transactionTooLarge(
-                "Transaction size (\(try tx.toCBOR().count)) exceeds the max limit "
+                "Transaction size (\(try tx.toCBORData().count)) exceeds the max limit "
                     + "(\(protocolParameters.maxTxSize)). Please try reducing the "
                     + "number of inputs or outputs."
             )
@@ -1433,12 +1625,13 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
     private func buildFakeWitnessSet() throws -> TransactionWitnessSet<T> {
         var witnessSet = try! buildWitnessSet(removeDupScript: true)
         if try witnessCount() > 0 {
-            witnessSet.vkeyWitnesses = try buildFakeVkeyWitnesses()
+            witnessSet.vkeyWitnesses =
+                .nonEmptyOrderedSet(try buildFakeVkeyWitnesses())
         }
         return witnessSet
     }
 
-    private func buildFakeVkeyWitnesses() throws -> NonEmptyOrderedCBORSet<VerificationKeyWitness> {
+    private func buildFakeVkeyWitnesses() throws -> NonEmptyOrderedSet<VerificationKeyWitness> {
         var witnesses: [VerificationKeyWitness] = []
         let witnessCount = try witnessCount()
         let fakeVKeyBytes = Array(TxBuilder.FAKE_VKEY.payload)
@@ -1453,7 +1646,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
 
             // Create a unique vkey by ANDing the fake vkey bytes with iBytes
             let uniqueVKeyBytes = zip(fakeVKeyBytes, iBytes).map { $0 & $1 }
-            let uniqueVKey = VKey(payload: Data(uniqueVKeyBytes))
+            let uniqueVKey = VerificationKey(payload: Data(uniqueVKeyBytes))
 
             // Create a unique signature by ANDing the fake signature bytes with iBytes + iBytes (64 bytes)
             let doubledIBytes = iBytes + iBytes
@@ -1467,7 +1660,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
             )
         }
 
-        return NonEmptyOrderedCBORSet(witnesses)
+        return NonEmptyOrderedSet(witnesses)
     }
 
     private func witnessCount() throws -> Int {
@@ -1606,17 +1799,18 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
     private func voteVkeyHashes() -> Set<VerificationKeyHash> {
         var results = Set<VerificationKeyHash>()
 
-        if let votingProcedures = votingProcedures {
-            for voter in votingProcedures {
-                switch voter.key.credential {
-                case .constitutionalCommitteeHotKeyhash(let vkeyHash):
-                    results.insert(vkeyHash)
-                case .drepKeyhash(let vkeyHash):
-                    results.insert(vkeyHash)
-                case .stakePoolKeyhash(let vkeyHash):
-                    results.insert(vkeyHash)
-                default:
-                    break
+        if let votingProcedures = votingProcedures?.allVotes {
+            for votingProcedure in votingProcedures {
+                let voter = votingProcedure.0
+                switch voter.credential {
+                    case .constitutionalCommitteeHotKeyhash(let vkeyHash):
+                        results.insert(vkeyHash)
+                    case .drepKeyhash(let vkeyHash):
+                        results.insert(vkeyHash)
+                    case .stakePoolKeyhash(let vkeyHash):
+                        results.insert(vkeyHash)
+                    default:
+                        break
                 }
             }
         }
@@ -1749,10 +1943,10 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
             ) async throws {
                 var curCollateralReturn = curTotal - Value(coin: collateralAmount)
 
-                let a = curTotal.coin < collateralAmount
-                let b = try shouldAddCollateralReturn(curCollateralReturn)
-                let c = 0 <= curCollateralReturn.coin
-                let d = try await minLovelacePostAlonzo(
+                var a = curTotal.coin < collateralAmount
+                var b = try shouldAddCollateralReturn(curCollateralReturn)
+                var c = 0 <= curCollateralReturn.coin
+                var d = try await minLovelacePostAlonzo(
                     TransactionOutput(
                         address: collateralReturnAddress, amount: curCollateralReturn),
                     context
@@ -1760,29 +1954,41 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
 
                 while (a || b && c && curCollateralReturn.coin < d) && !candidateInputs.isEmpty {
                     let candidate = candidateInputs.removeLast()
-                    if !String(describing: type(of: candidate.output.address.addressType))
-                        .hasPrefix("script")
-                        && candidate.output.amount.coin > 2_000_000
+                    if let addressType = candidate.output.address.addressType,
+                       addressType != .scriptKey && addressType != .scriptScript && addressType != .scriptPointer && addressType != .scriptNone,
+                       candidate.output.amount.coin > 2_000_000,
+                       !collaterals.contains(candidate)
                     {
                         collaterals.append(candidate)
                         curTotal += candidate.output.amount
                         curCollateralReturn = curTotal - Value(coin: collateralAmount)
                     }
+                    
+                    // Recalculate conditions for next iteration
+                    a = curTotal.coin < collateralAmount
+                    b = try shouldAddCollateralReturn(curCollateralReturn)
+                    c = 0 <= curCollateralReturn.coin
+                    d = try await minLovelacePostAlonzo(
+                        TransactionOutput(
+                            address: collateralReturnAddress, amount: curCollateralReturn),
+                        context
+                    )
                 }
             }
 
             var sortedInputs = try inputs.sorted {
-                (try $0.output.toCBOR().count, -$0.output.amount.coin) < (
-                    try $1.output.toCBOR().count, -$1.output.amount.coin
+                (try $0.output.toCBORData().count, -$0.output.amount.coin) < (
+                    try $1.output.toCBORData().count, -$1.output.amount.coin
                 )
             }
+            
             
             try await addCollateralInput(&tmpVal, &sortedInputs)
 
             if tmpVal.coin < collateralAmount {
                 var sortedInputs = try potentialInputs.sorted {
-                    (try $0.output.toCBOR().count, -$0.output.amount.coin) < (
-                        try $1.output.toCBOR().count, -$1.output.amount.coin
+                    (try $0.output.toCBORData().count, -$0.output.amount.coin) < (
+                        try $1.output.toCBORData().count, -$1.output.amount.coin
                     )
                 }
                 try await addCollateralInput(&tmpVal, &sortedInputs)
@@ -1791,8 +1997,8 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
             if tmpVal.coin < collateralAmount {
                 let utxos = try await context.utxos(address: collateralReturnAddress)
                 var sortedInputs = try utxos.sorted {
-                    (try $0.output.toCBOR().count, -$0.output.amount.coin) < (
-                        try $1.output.toCBOR().count, -$1.output.amount.coin
+                    (try $0.output.toCBORData().count, -$0.output.amount.coin) < (
+                        try $1.output.toCBORData().count, -$1.output.amount.coin
                     )
                 }
                 try await addCollateralInput(&tmpVal, &sortedInputs)
@@ -1858,7 +2064,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
                         "Expected tag of redeemer to be set, but found nil")
                 }
 
-                let tagname = tag.rawValue
+                let tagname = tag.description()
                 let key = "\(tagname):\(redeemer.index)"
 
                 guard let exUnits = estimatedExecutionUnits[key] else {
@@ -1882,16 +2088,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
         collateralChangeAddress: Address?
     ) async throws -> [String: ExecutionUnits] {
         // Create a deep copy of current builder, so we won't mess up current builder's internal states
-        let tmpBuilder = TxBuilder(context: context)
-        for field in Mirror(reflecting: self).children {
-            if let label = field.label,
-                label != "context"
-            {
-                Mirror(reflecting: tmpBuilder).children.first { $0.label == label }.map {
-                    ($0.value as AnyObject).setValue(field.value, forKey: label)
-                }
-            }
-        }
+        let tmpBuilder = self.copy()
         tmpBuilder._shouldEstimateExecutionUnits = false
         _shouldEstimateExecutionUnits = false
 
@@ -1973,71 +2170,5 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext> where T == 
 
             try mergeChanges(changes)
         }
-    }
-
-    private func buildWitnessSet(removeDupScript: Bool = false) throws -> TransactionWitnessSet<T> {
-        var nativeScriptElements: [NativeScript] = []
-        var plutusV1ScriptElements: [PlutusV1Script] = []
-        var plutusV2ScriptElements: [PlutusV2Script] = []
-        var plutusV3ScriptElements: [PlutusV3Script] = []
-
-        let inputScripts: CBORSet<ScriptHash>
-        if removeDupScript {
-            inputScripts = CBORSet(
-                Set(
-                    inputs.compactMap { input in
-                        if let script = input.output.script {
-                            return try? scriptHash(script: script)
-                        }
-                        return nil
-                    }))
-        } else {
-            inputScripts = CBORSet<ScriptHash>([])
-        }
-
-        for script in scripts {
-            let scriptHash = try scriptHash(script: script)
-            if !inputScripts.contains(scriptHash) {
-                switch script {
-                case .nativeScript(let nativeScript):
-                    nativeScriptElements.append(nativeScript)
-                case .plutusV1Script(let plutusScript):
-                    plutusV1ScriptElements.append(plutusScript)
-                case .plutusV2Script(let plutusScript):
-                    plutusV2ScriptElements.append(plutusScript)
-                case .plutusV3Script(let plutusScript):
-                    plutusV3ScriptElements.append(plutusScript)
-                }
-            }
-        }
-
-        return TransactionWitnessSet(
-            vkeyWitnesses: nil,
-            nativeScripts: nativeScriptElements.isEmpty
-                ? nil
-                : NonEmptyOrderedCBORSet<NativeScript>(
-                    nativeScriptElements
-                ),
-            bootstrapWitness: nil,
-            plutusV1Script: plutusV1ScriptElements.isEmpty
-                ? nil
-                : NonEmptyOrderedCBORSet<PlutusV1Script>(
-                    plutusV1ScriptElements
-                ),
-            plutusV2Script: plutusV2ScriptElements.isEmpty
-                ? nil
-                : NonEmptyOrderedCBORSet<PlutusV2Script>(
-                    plutusV2ScriptElements
-                ),
-            plutusData: datums.isEmpty
-                ? nil
-                : NonEmptyOrderedCBORSet<RawPlutusData>(
-                    try datums.values
-                        .map { RawPlutusData(data: try $0.toRawDatum()) }
-                ),
-            redeemers: try _redeemerList.isEmpty ? nil : redeemers(),
-            plutusV3Script: plutusV3ScriptElements.isEmpty
-                ? nil : NonEmptyOrderedCBORSet<PlutusV3Script>(plutusV3ScriptElements)
-        )
     }
 }

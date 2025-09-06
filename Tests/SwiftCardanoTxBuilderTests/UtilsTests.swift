@@ -10,7 +10,7 @@ import Testing
 
 @Test("Min Lovelace Ada Only")
 func testMinLovelaceAdaOnly() async throws {
-    let context = MockChainContext()
+    let context = MockChainContext<Never>()
     let protocolParameters = try await context.protocolParameters()
     let result = try await minLovelacePreAlonzo(Value(coin: 2_000_000), context)
     #expect(result == protocolParameters.utxoCostPerByte)
@@ -21,7 +21,7 @@ func testMinLovelaceAdaOnly() async throws {
 struct TestMinLoveLaceMultiAsset {
     @Test("Min Lovelace Multi Asset 1")
     func testMinLovelaceMultiAsset1() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
         let amount = try Value(
             from: [
                 2_000_000,
@@ -34,7 +34,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 2")
     func testMinLovelaceMultiAsset2() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         let amount = try Value(
             from: [
@@ -53,7 +53,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 3")
     func testMinLovelaceMultiAsset3() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         let amount = try Value(
             from: [
@@ -75,7 +75,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 4")
     func testMinLovelaceMultiAsset4() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         let amount = try Value(
             from: [
@@ -93,7 +93,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 5")
     func testMinLovelaceMultiAsset5() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         let amount = try Value(
             from: [
@@ -115,7 +115,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 6")
     func testMinLovelaceMultiAsset6() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         var policy1Assets: [String: Int] = [:]
         var policy2Assets: [String: Int] = [:]
@@ -153,7 +153,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 7")
     func testMinLovelaceMultiAsset7() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         let amount = try Value(
             from: [
@@ -168,7 +168,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 8")
     func testMinLovelaceMultiAsset8() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         let amount = try Value(
             from: [
@@ -189,7 +189,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 9")
     func testMinLovelaceMultiAsset9() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         let amount = try Value(
             from: [
@@ -269,7 +269,7 @@ struct TieredReferenceScriptFeeTests {
     
     @Test("Tiered Reference Script Fee")
     func testTieredReferenceScriptFee() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         let result = try await tieredReferenceScriptFee(context, scriptsSize: 80 * 1024)
         #expect(result == 4_489_380)
@@ -277,7 +277,7 @@ struct TieredReferenceScriptFeeTests {
 
     @Test("Tiered Reference Script Fee Exceeds Max Size")
     func testTieredReferenceScriptFeeExceedsMaxSize() async throws {
-        let context = MockChainContext()
+        let context = MockChainContext<Never>()
 
         await #expect(
             throws: CardanoTxBuilderError.valueError(
@@ -289,7 +289,7 @@ struct TieredReferenceScriptFeeTests {
 
     @Test("Tiered Reference Script Fee No Params")
     func testTieredReferenceScriptFeeNoParams() async throws {
-        let context = MockChainContext(
+        let context = MockChainContext<Never>(
             protocolParameters: ProtocolParameters(
                 collateralPercentage: 0,
                 coinsPerUtxoWord: 0,

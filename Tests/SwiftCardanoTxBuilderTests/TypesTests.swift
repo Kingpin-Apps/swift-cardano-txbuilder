@@ -79,12 +79,12 @@ struct TypesTests {
         let addressCase = AddressOrString.address(address)
         #expect(addressCase.asAddress != nil)
         #expect(try addressCase.asString == address.toBech32())
-        #expect(try addressCase.asAddress == address)
+        #expect(addressCase.asAddress == address)
 
         // Test string case
         let stringCase = AddressOrString.string(testAddressString)
         #expect(stringCase.asAddress != nil)
         #expect(stringCase.asString == testAddressString)
-        #expect(try stringCase.asAddress == address)
+        #expect(stringCase.asAddress == address)
     }
 }
