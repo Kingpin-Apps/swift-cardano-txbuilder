@@ -1,5 +1,6 @@
-## 0.1.1 (2025-09-06)
+## 0.1.2 (2025-09-07)
 
 ### Fix
 
+- add and improve documentation
 - changes and tests fixes
