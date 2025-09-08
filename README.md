@@ -29,7 +29,6 @@ Add this to your `Package.swift`:
 ```swift
 dependencies: [
     .package(url: "https://github.com/Kingpin-Apps/swift-cardano-txbuilder.git", from: "0.1.0"),
-    .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.1.16")  // For BlockFrost support
 ]
 ```
 
@@ -375,17 +374,221 @@ do {
 - `transactionTooLarge`: Transaction exceeds protocol limits
 - `invalidInput`: Invalid script, address, or datum validation
 
-## Testing
+## Redeemer Type Selection
 
-The library includes comprehensive test coverage with mock chain contexts:
+The `TxBuilder` is generic over a redeemer type `T`. Choose the appropriate type based on your transaction requirements:
 
-```bash
-swift test
+### Using `Never` for Non-Script Transactions
+
+Use `Never` when your transaction doesn't involve any Plutus scripts:
+
+```swift
+// For simple ADA transfers, token transfers without scripts
+let chainContext = try await BlockFrostChainContext<Never>(
+    network: .preview,
+    environmentVariable: "BLOCKFROST_API_KEY"
+)
+let txBuilder = TxBuilder<Never, BlockFrostChainContext>(context: chainContext)
+
+// These transactions don't require redeemers:
+// - Basic ADA transfers
+// - Native token transfers (using existing tokens)
+// - Certificate transactions (stake registration, delegation)
+// - Transactions using only native scripts
 ```
 
-Run specific tests:
-```bash
-swift test --filter testTokenTransferWithChange
+### Using `PlutusData` for Plutus Script Transactions
+
+Use `PlutusData` when working with Plutus scripts:
+
+```swift
+// For transactions involving Plutus scripts
+let chainContext = try await BlockFrostChainContext<PlutusData>(
+    network: .preview,
+    environmentVariable: "BLOCKFROST_API_KEY"
+)
+let txBuilder = TxBuilder<PlutusData, BlockFrostChainContext>(context: chainContext)
+
+// These transactions require PlutusData redeemers:
+// - Spending from Plutus script addresses
+// - Minting tokens with Plutus minting policies
+// - Certificate transactions with Plutus scripts
+// - Withdrawal transactions with Plutus scripts
+```
+
+### Using Custom Types for Structured Redeemers
+
+For strongly-typed redeemers, define custom types that conform to `CBORSerializable & Hashable`:
+
+```swift
+// Define your custom redeemer type
+struct MyRedeemer: CBORSerializable, Hashable {
+    let action: String
+    let value: Int
+    
+    // Implement CBORSerializable methods
+    func toCBOR() -> CBOR {
+        return .array([.string(action), .int(value)])
+    }
+    
+    init(from cbor: CBOR) throws {
+        // Deserialize from CBOR
+        // Implementation details...
+    }
+}
+
+// Use with TxBuilder
+let chainContext = try await BlockFrostChainContext<MyRedeemer>(
+    network: .preview,
+    environmentVariable: "BLOCKFROST_API_KEY"
+)
+let txBuilder = TxBuilder<MyRedeemer, BlockFrostChainContext>(context: chainContext)
+```
+
+## Transaction Submission
+
+Once you've built a transaction, you need to sign it and submit it to the blockchain:
+
+### Building and Preparing for Submission
+
+```swift
+// Build the transaction to sign later
+let transactionBody = try await txBuilder.build(changeAddress: senderAddress)
+
+// Create a transaction with the body (witness set will be empty initially)
+let unsignedTransaction = Transaction<Never>(
+    body: transactionBody,
+    witnessSet: txBuilder.buildWitnessSet(),
+    isValid: true,
+    auxiliaryData: nil
+)
+```
+
+### Signing the Transaction
+
+Before submitting, you need to sign the transaction with the appropriate private keys:
+
+```swift
+// Build the signed transaction
+// You need your signing keys
+
+let paymentSigningKey = try PaymentSigningKey.load(from: "path/to/payment.skey")
+let signedTransaction = try await txBuilder.buildAndSign(
+    signingKeys: [.signingKey(paymentSigningKey)], 
+    changeAddress: senderAddress
+)
+
+// Or manually sign a pre-built transaction
+var vkeyWitnesses = [] as [VerificationKeyWitness]
+let vkey: any VerificationKeyProtocol = try paymentSigningKey.toVerificationKey()
+let vkeyHash: VerificationKeyHash = try vkey.hash()
+let vkeyType: VerificationKeyType = try paymentSigningKey.toVerificationKeyType()
+let signature = try paymentSigningKey.sign(
+    data: unsignedTransaction.transactionBody.hash()
+)
+vkeyWitnesses.append(
+    VerificationKeyWitness(
+        vkey: vkeyType,
+        signature: signature
+    )
+)
+unsignedTransaction.witnessSet.vkeyWitnesses = .nonEmptyOrderedSet(
+    NonEmptyOrderedSet(vkeyWitnesses)
+)
+let signedTransaction = unsignedTransaction  // Now signed
+```
+
+### Submitting to the Blockchain
+
+Use the chain context to submit your signed transaction:
+
+```swift
+do {
+    // Submit the signed transaction
+    let txId = try await chainContext.submitTx(tx: .transaction(signedTransaction))
+    print("Transaction submitted successfully!")
+    print("Transaction ID: \(txId)")
+    
+} catch {
+    print("Failed to submit transaction: \(error)")
+}
+```
+
+### Alternative Submission Methods
+
+The chain context supports multiple submission formats:
+
+```swift
+// Submit as transaction object
+let txId = try await chainContext.submitTx(tx: .transaction(signedTransaction))
+
+// Submit as raw CBOR bytes
+let cborData = signedTransaction.toCBORData()
+let txId = try await chainContext.submitTx(tx: .bytes(cborData))
+
+// Submit as hex string
+let hexString = cborData.toHex
+let txId = try await chainContext.submitTx(tx: .string(hexString))
+
+// Or use the lower-level CBOR method directly
+let txId = try await chainContext.submitTxCBOR(cbor: cborData)
+```
+
+### Complete Transaction Flow Example
+
+```swift
+// 1. Initialize chain context and builder
+let chainContext = try await BlockFrostChainContext<Never>(
+    network: .preview,
+    environmentVariable: "BLOCKFROST_API_KEY"
+)
+let txBuilder = TxBuilder<Never, BlockFrostChainContext>(context: chainContext)
+
+let paymentSigningKey = try PaymentSigningKey.load(from: "path/to/payment.skey")
+
+// 2. Build signed transaction
+let txBody = try await txBuilder
+    .addInputAddress(.address(senderAddress))
+    .addOutput(TransactionOutput(
+        address: receiverAddress,
+        amount: Value(coin: 2_000_000)
+    ))
+    .buildAndSign(
+        signingKeys: [.signingKey(paymentSigningKey)], 
+        changeAddress: senderAddress
+    )
+
+// 3. Submit to blockchain
+do {
+    let txId = try await chainContext.submitTx(tx: .transaction(signedTransaction))
+    print("Success! Transaction ID: \(txId)")
+    
+    // Optional: Monitor transaction confirmation
+    // You can query the transaction status using the txId
+    
+} catch {
+    print("Submission failed: \(error)")
+}
+```
+
+### Error Handling During Submission
+
+```swift
+do {
+    let txId = try await chainContext.submitTx(tx: .transaction(signedTransaction))
+    print("Transaction submitted: \(txId)")
+    
+} catch ChainContextError.invalidArgument(let message) {
+    print("Invalid transaction: \(message)")
+    // Transaction is malformed or violates protocol rules
+    
+} catch ChainContextError.transactionFailed(let message) {
+    print("Submission failed: \(message)")
+    // Network issues or node rejection
+    
+} catch {
+    print("Unexpected error: \(error)")
+}
 ```
 
 ## Examples

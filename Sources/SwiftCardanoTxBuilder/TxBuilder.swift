@@ -691,6 +691,8 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     }
 
     /// Get the redeemers for the transaction
+    /// - Throws: CardanoTxBuilderError if redeemer is in invalid state
+    /// - Returns: Redeemers in either map or list format
     public func redeemers() throws -> Redeemers<T> {
         let redeemerList = _redeemerList
 
