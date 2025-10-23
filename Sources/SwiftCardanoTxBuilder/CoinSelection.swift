@@ -135,8 +135,10 @@ public class LargestFirstSelector: UTxOSelector {
                 }
             }
         }
+        
+        let returnAmount = selectedAmount - totalRequested
 
-        return (selected, selectedAmount - totalRequested)
+        return (selected, returnAmount)
     }
 }
 

@@ -10,9 +10,7 @@ import SwiftCardanoCore
 
 // MARK: - Mock Classes
 
-class MockChainContext<T: CBORSerializable & Hashable>: ChainContext {
-    typealias ReedemerType = T
-
+class MockChainContext: ChainContext {
     public var _protocolParameters: ProtocolParameters?
 
     public var _utxos: [UTxO]?
@@ -52,7 +50,7 @@ class MockChainContext<T: CBORSerializable & Hashable>: ChainContext {
         }
     }
 
-    var network: SwiftCardanoCore.Network {
+    var networkId: SwiftCardanoCore.NetworkId {
         .testnet
     }
 
@@ -117,7 +115,7 @@ class MockChainContext<T: CBORSerializable & Hashable>: ChainContext {
         ]
     }
 
-    func stakeAddressInfo(address: SwiftCardanoCore.Address) async throws -> [SwiftCardanoChain.StakeAddressInfo] {
+    func stakeAddressInfo(address: SwiftCardanoCore.Address) async throws -> [StakeAddressInfo] {
         return []
     }
 

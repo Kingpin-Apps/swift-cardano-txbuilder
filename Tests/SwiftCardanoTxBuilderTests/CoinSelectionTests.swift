@@ -52,7 +52,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>()
+            context: MockChainContext()
         )
 
         #expect(selected == [utxos[9], utxos[8]])
@@ -70,7 +70,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>()
+            context: MockChainContext()
         )
 
         #expect(selected == [utxos[9], utxos[8]])
@@ -87,7 +87,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>(),
+            context: MockChainContext(),
             respectMinUtxo: false
         )
 
@@ -105,7 +105,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>(),
+            context: MockChainContext(),
             includeMaxFee: false,
             respectMinUtxo: false
         )
@@ -123,7 +123,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>(),
+            context: MockChainContext(),
             includeMaxFee: false,
             respectMinUtxo: true
         )
@@ -142,7 +142,7 @@ struct LargestFirstSelectorTests {
             _ = try await selector.select(
                 utxos: utxos,
                 outputs: request,
-                context: MockChainContext<Never>()
+                context: MockChainContext()
             )
         }
     }
@@ -158,7 +158,7 @@ struct LargestFirstSelectorTests {
             _ = try await selector.select(
                 utxos: utxos,
                 outputs: request,
-                context: MockChainContext<Never>(),
+                context: MockChainContext(),
                 maxInputCount: 1
             )
         }
@@ -184,7 +184,7 @@ struct LargestFirstSelectorTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>()
+            context: MockChainContext()
         )
         let expected = Array(utxos.reversed())
 
@@ -210,7 +210,7 @@ struct RandomImproveMultiAssetTests {
         let (selected1, _) = try await selector1.select(
             utxos: utxos,
             outputs: request1,
-            context: MockChainContext<Never>()
+            context: MockChainContext()
         )
 
         let expected = Array(utxos.reversed().prefix(4))
@@ -231,7 +231,7 @@ struct RandomImproveMultiAssetTests {
         let (selected2, _) = try await selector2.select(
             utxos: utxos,
             outputs: request2,
-            context: MockChainContext<Never>()
+            context: MockChainContext()
         )
 
         #expect(selected2 == expected)
@@ -252,7 +252,7 @@ struct RandomImproveMultiAssetTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>()
+            context: MockChainContext()
         )
 
         #expect(selected == [utxos[9], utxos[8], utxos[5]])
@@ -273,7 +273,7 @@ struct RandomImproveMultiAssetTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>(),
+            context: MockChainContext(),
             includeMaxFee: false
         )
 
@@ -295,7 +295,7 @@ struct RandomImproveMultiAssetTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>(),
+            context: MockChainContext(),
             includeMaxFee: false,
             respectMinUtxo: true
         )
@@ -319,7 +319,7 @@ struct RandomImproveMultiAssetTests {
             _ = try await selector.select(
                 utxos: utxos,
                 outputs: request,
-                context: MockChainContext<Never>()
+                context: MockChainContext()
             )
         }
     }
@@ -339,7 +339,7 @@ struct RandomImproveMultiAssetTests {
             _ = try await selector.select(
                 utxos: utxos,
                 outputs: request,
-                context: MockChainContext<Never>(),
+                context: MockChainContext(),
                 maxInputCount: 1
             )
         }
@@ -370,7 +370,7 @@ struct RandomImproveMultiAssetTests {
         let (selected, _) = try await selector.select(
             utxos: utxos,
             outputs: request,
-            context: MockChainContext<Never>()
+            context: MockChainContext()
         )
 
         #expect(selected == [utxos[9], utxos[8], utxos[3], utxos[7], utxos[0]])

@@ -195,7 +195,7 @@ public func minLovelacePostAlonzo(_ output: TransactionOutput, _ context: any Ch
         address: output.address,
         amount: amount,
         datumHash: output.datumHash,
-        datum: output.datum,
+        datumOption: output.datumOption,
         script: output.script,
         postAlonzo: true
     )
@@ -204,7 +204,7 @@ public func minLovelacePostAlonzo(_ output: TransactionOutput, _ context: any Ch
     * UInt64(protocolParameters.utxoCostPerByte)
 }
 
-struct Utils<T: CBORSerializable & Hashable> {
+struct Utils {
     
     /// Calculate plutus script data hash
     ///
@@ -214,7 +214,7 @@ struct Utils<T: CBORSerializable & Hashable> {
     ///   - costModels: Cost models.
     /// - Returns: Plutus script data hash
     public static func scriptDataHash(
-        redeemers: Redeemers<T>? = .list([]),
+        redeemers: Redeemers? = .list([]),
         datums: [Datum] = [],
         costModels: CostModels? = nil
     ) throws -> ScriptDataHash {

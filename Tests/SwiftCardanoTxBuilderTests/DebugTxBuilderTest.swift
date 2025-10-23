@@ -7,8 +7,8 @@ import Testing
 struct DebugTxBuilderTests {
     
     @Test func testDebugTokenTransferAddressLookup() async throws {
-        let chainContext = MockChainContext<Never>()
-        let txBuilder = TxBuilder<Never, MockChainContext>(context: chainContext)
+        let chainContext = MockChainContext()
+        let txBuilder = TxBuilder(context: chainContext)
         
         let vaultAddress = try Address(from: .string("addr_test1vrs324jltsc0ssuptpa5ngpfk89cps92xa99a2t6vlg6kdqtm5qnv"))
         let receiverAddress = try Address(from: .string("addr_test1vrm9x2zsux7va6w892g38tvchnzahvcd9tykqf3ygnmwtaqyfg52x"))
@@ -22,7 +22,7 @@ struct DebugTxBuilderTests {
         let tokenUtxo = UTxO(
             input: try TransactionInput(from: .list([
                 .string("e11efc26f94a3cbf724dc052c43abf36f7a631a831acc6d783f1c9c8c52725c5"),
-                .int(0)
+                .uint(0)
             ])),
             output: TransactionOutput(
                 address: vaultAddress,
@@ -76,7 +76,7 @@ struct DebugTxBuilderTests {
             .addInput(UTxO(
                 input: try TransactionInput(from: .list([
                     .bytes(Data(repeating: 0x31, count: 32)),
-                    .int(0)
+                    .uint(0)
                 ])),
                 output: TransactionOutput(
                     address: receiverAddress,
@@ -109,7 +109,7 @@ struct DebugTxBuilderTests {
     }
     
     @Test func testUTxOSelectorDirectly() async throws {
-        let chainContext = MockChainContext<Never>()
+        let chainContext = MockChainContext()
         
         let vaultAddress = try Address(from: .string("addr_test1vrs324jltsc0ssuptpa5ngpfk89cps92xa99a2t6vlg6kdqtm5qnv"))
         let receiverAddress = try Address(from: .string("addr_test1vrm9x2zsux7va6w892g38tvchnzahvcd9tykqf3ygnmwtaqyfg52x"))
@@ -125,7 +125,7 @@ struct DebugTxBuilderTests {
             UTxO(
                 input: try TransactionInput(from: .list([
                     .bytes(Data(repeating: 0x31, count: 32)),
-                    .int(0)
+                    .uint(0)
                 ])),
                 output: TransactionOutput(
                     address: receiverAddress,
@@ -136,7 +136,7 @@ struct DebugTxBuilderTests {
             UTxO(
                 input: try TransactionInput(from: .list([
                     .string("e11efc26f94a3cbf724dc052c43abf36f7a631a831acc6d783f1c9c8c52725c5"),
-                    .int(0)
+                    .uint(0)
                 ])),
                 output: TransactionOutput(
                     address: vaultAddress,
@@ -195,8 +195,8 @@ struct DebugTxBuilderTests {
     }
     
     @Test func testUTxOPoolConstruction() async throws {
-        let chainContext = MockChainContext<Never>()
-        let txBuilder = TxBuilder<Never, MockChainContext>(context: chainContext)
+        let chainContext = MockChainContext()
+        let txBuilder = TxBuilder(context: chainContext)
         
         let vaultAddress = try Address(from: .string("addr_test1vrs324jltsc0ssuptpa5ngpfk89cps92xa99a2t6vlg6kdqtm5qnv"))
         let receiverAddress = try Address(from: .string("addr_test1vrm9x2zsux7va6w892g38tvchnzahvcd9tykqf3ygnmwtaqyfg52x"))
@@ -210,7 +210,7 @@ struct DebugTxBuilderTests {
         let tokenUtxo = UTxO(
             input: try TransactionInput(from: .list([
                 .string("e11efc26f94a3cbf724dc052c43abf36f7a631a831acc6d783f1c9c8c52725c5"),
-                .int(0)
+                .uint(0)
             ])),
             output: TransactionOutput(
                 address: vaultAddress,
@@ -230,7 +230,7 @@ struct DebugTxBuilderTests {
         let adaUtxo = UTxO(
             input: try TransactionInput(from: .list([
                 .bytes(Data(repeating: 0x31, count: 32)),
-                .int(0)
+                .uint(0)
             ])),
             output: TransactionOutput(
                 address: receiverAddress,
@@ -309,7 +309,7 @@ struct DebugTxBuilderTests {
     }
     
     @Test func testUnfulfilledAmountCalculation() async throws {
-        let chainContext = MockChainContext<Never>()
+        let chainContext = MockChainContext()
         
         let tokenPolicyId = ScriptHash(
             payload: "1f847bb9ac60e869780037c0510dbd89f745316db7ec4fee81ff1e97".hexStringToData
@@ -347,7 +347,7 @@ struct DebugTxBuilderTests {
             UTxO(
                 input: try TransactionInput(from: .list([
                     .string("e11efc26f94a3cbf724dc052c43abf36f7a631a831acc6d783f1c9c8c52725c5"),
-                    .int(0)
+                    .uint(0)
                 ])),
                 output: TransactionOutput(
                     address: try Address(from: .string("addr_test1vrs324jltsc0ssuptpa5ngpfk89cps92xa99a2t6vlg6kdqtm5qnv")),

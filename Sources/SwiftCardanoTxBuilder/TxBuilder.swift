@@ -3,17 +3,15 @@ import Logging
 import SwiftCardanoChain
 import SwiftCardanoCore
 
-//let logger = Logger(label: "com.swift-cardano-txbuilder")
-
 /// A class builder that makes it easy to build a transaction.
-public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable where T == Context.ReedemerType {
+public class TxBuilder: Loggable {
     // MARK: - Loggable Conformance
     public var logger: Logging.Logger
 
     // MARK: - Constants
     /// A fake verification key for fee calculation purpose only
     private static var FAKE_VKEY: any VerificationKeyProtocol {
-        VerificationKey(
+        try! VerificationKey(
             payload: Data(
                 hex: "5797dc2cc919dfec0bb849551ebdf30d96e5cbe0f33f734a87fe826db30f7ef9"
             )
@@ -31,7 +29,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     // MARK: - Properties
 
     /// The chain context for this transaction builder
-    public let context: Context
+    public let context: any ChainContext
 
     /// UTxO selectors used for coin selection
     public var utxoSelectors: [UTxOSelector] = [RandomImproveMultiAsset(), LargestFirstSelector()]
@@ -105,7 +103,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     }
     
     /// Inputs to scripts mapping
-    public var redeemerListOverride: [Redeemer<T>] {
+    public var redeemerListOverride: [Redeemer] {
         get { _redeemers }
         set { _redeemers = newValue }
     }
@@ -121,11 +119,11 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     private var _datums: [DatumHash: Datum] = [:]
     private var _collateralReturn: TransactionOutput?
     private var _totalCollateral: Int?
-    private var _redeemers: [Redeemer<T>] = []
-    private var _inputsToRedeemers: [UTxO: Redeemer<T>] = [:]
-    private var _mintingScriptToRedeemers: [(ScriptType, Redeemer<T>?)] = []
-    private var _withdrawalScriptToRedeemers: [(ScriptType, Redeemer<T>?)] = []
-    private var _certificateScriptToRedeemers: [(ScriptType, Redeemer<T>?)] = []
+    private var _redeemers: [Redeemer] = []
+    private var _inputsToRedeemers: [UTxO: Redeemer] = [:]
+    private var _mintingScriptToRedeemers: [(ScriptType, Redeemer?)] = []
+    private var _withdrawalScriptToRedeemers: [(ScriptType, Redeemer?)] = []
+    private var _certificateScriptToRedeemers: [(ScriptType, Redeemer?)] = []
     private var _inputsToScripts: [UTxO: ScriptType] = [:]
     private var _referenceScripts: [ScriptType] = []
     private var _shouldEstimateExecutionUnits: Bool?
@@ -137,7 +135,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
 
     /// Initialize a new transaction builder
     /// - Parameter context: The chain context to use
-    public init(context: Context,
+    public init(context: any ChainContext,
                 utxoSelectors: [UTxOSelector] = [RandomImproveMultiAsset(), LargestFirstSelector()],
                 executionMemoryBuffer: Double = 0.2,
                 executionStepBuffer: Double = 0.2,
@@ -196,7 +194,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
         _ utxo: UTxO,
         script: ScriptOrUTxO? = nil,
         datum: Datum? = nil,
-        redeemer: Redeemer<T>? = nil
+        redeemer: Redeemer? = nil
     ) async throws -> TxBuilder {
         guard
             case let addressType = utxo.output.address.addressType,
@@ -218,7 +216,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
 
         if datum != nil,
             utxo.output.datumHash == nil,
-            utxo.output.datum != nil
+            utxo.output.datumOption != nil
         {
             throw CardanoTxBuilderError.invalidInput(
                 "Inline Datum found in transaction output \(utxo.input), so attaching a Datum manually is not allowed"
@@ -315,7 +313,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     @discardableResult
     public func addMintingScript(
         _ script: ScriptOrUTxO,
-        redeemer: Redeemer<T>? = nil
+        redeemer: Redeemer? = nil
     ) throws -> TxBuilder {
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
@@ -350,7 +348,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     @discardableResult
     public func addWithdrawalScript(
         _ script: ScriptOrUTxO,
-        redeemer: Redeemer<T>? = nil
+        redeemer: Redeemer? = nil
     ) throws -> TxBuilder {
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
@@ -387,7 +385,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     @discardableResult
     public func addCertificateScript(
         _ script: ScriptOrUTxO,
-        redeemer: Redeemer<T>? = nil
+        redeemer: Redeemer? = nil
     ) throws -> TxBuilder {
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
@@ -464,7 +462,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     }
 
     /// Build the transaction witness set.
-    public func buildWitnessSet(removeDupScript: Bool = false) throws -> TransactionWitnessSet<T> {
+    public func buildWitnessSet(removeDupScript: Bool = false) throws -> TransactionWitnessSet {
         var nativeScriptElements: [NativeScript] = []
         var plutusV1ScriptElements: [PlutusV1Script] = []
         var plutusV2ScriptElements: [PlutusV2Script] = []
@@ -520,9 +518,8 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
                 )),
             plutusData: datums.isEmpty
                 ? nil
-                : .nonEmptyOrderedSet(NonEmptyOrderedSet<RawPlutusData>(
-                    try datums.values
-                        .map { RawPlutusData(data: try $0.toRawDatum()) }
+                : .nonEmptyOrderedSet(NonEmptyOrderedSet<PlutusData>(
+                    try datums.values.map { try $0.toPlutusData() }
                 )),
             redeemers: try _redeemerList.isEmpty ? nil : redeemers(),
             plutusV3Script: plutusV3ScriptElements.isEmpty
@@ -531,7 +528,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     }
     
     public func copy() -> TxBuilder {
-        let copy = TxBuilder<T, Context>.init(
+        let copy = TxBuilder.init(
             context: self.context,
             utxoSelectors: self.utxoSelectors,
             executionMemoryBuffer: self.executionMemoryBuffer,
@@ -673,12 +670,12 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     }
 
     /// The redeemers used in the transaction
-    private var _redeemerList: [Redeemer<T>] {
+    private var _redeemerList: [Redeemer] {
         if self.redeemerListOverride.count > 0 {
             return self.redeemerListOverride
         }
         
-        var redeemers: [Redeemer<T>] = []
+        var redeemers: [Redeemer] = []
 
         redeemers += _inputsToRedeemers.values.map { $0 }
         redeemers += _mintingScriptToRedeemers.compactMap { $0.1 }
@@ -693,12 +690,12 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
     /// Get the redeemers for the transaction
     /// - Throws: CardanoTxBuilderError if redeemer is in invalid state
     /// - Returns: Redeemers in either map or list format
-    public func redeemers() throws -> Redeemers<T> {
+    public func redeemers() throws -> Redeemers {
         let redeemerList = _redeemerList
 
         // We have to serialize redeemers as a map if there are no redeemers
         if useRedeemerMap || redeemerList.isEmpty {
-            var redeemers = RedeemerMap<T>()
+            var redeemers = RedeemerMap()
 
             for redeemer in redeemerList {
                 guard let tag = redeemer.tag else {
@@ -1086,7 +1083,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
         autoTtlOffset: Int? = nil,
         autoRequiredSigners: Bool? = nil,
         forceSkeys: Bool = false
-    ) async throws -> Transaction<T> {
+    ) async throws -> Transaction {
         // The given signers should be required signers if they weren't added yet
         if autoRequiredSigners == true && !allScripts.isEmpty && requiredSigners == nil {
             // Collect all signatories from explicitly defined
@@ -1176,7 +1173,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
         return true
     }
 
-    private func consolidateRedeemer(_ redeemer: inout Redeemer<T>) throws {
+    private func consolidateRedeemer(_ redeemer: inout Redeemer) throws {
         if _shouldEstimateExecutionUnits == nil {
             if redeemer.exUnits != nil {
                 _shouldEstimateExecutionUnits = false
@@ -1592,7 +1589,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
         return txBody
     }
 
-    private func buildFullFakeTx() async throws -> Transaction<T> {
+    private func buildFullFakeTx() async throws -> Transaction {
         var txBody = try! await buildTxBody()
 
         if txBody.fee == 0 {
@@ -1602,7 +1599,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
         }
 
         let witness = try buildFakeWitnessSet()
-        let tx = Transaction<T>(
+        let tx = Transaction(
             transactionBody: txBody,
             transactionWitnessSet: witness,
             valid: true,
@@ -1624,7 +1621,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
         return tx
     }
 
-    private func buildFakeWitnessSet() throws -> TransactionWitnessSet<T> {
+    private func buildFakeWitnessSet() throws -> TransactionWitnessSet {
         var witnessSet = try! buildWitnessSet(removeDupScript: true)
         if try witnessCount() > 0 {
             witnessSet.vkeyWitnesses =
@@ -1648,7 +1645,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
 
             // Create a unique vkey by ANDing the fake vkey bytes with iBytes
             let uniqueVKeyBytes = zip(fakeVKeyBytes, iBytes).map { $0 & $1 }
-            let uniqueVKey = VerificationKey(payload: Data(uniqueVKeyBytes))
+            let uniqueVKey = try VerificationKey(payload: Data(uniqueVKeyBytes))
 
             // Create a unique signature by ANDing the fake signature bytes with iBytes + iBytes (64 bytes)
             let doubledIBytes = iBytes + iBytes
@@ -1893,7 +1890,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
             if let redeemer = redeemer {
                 let scriptStakingCredential = try Address(
                     stakingPart: .scriptHash(try! scriptHash(script: script)),
-                    network: context.network
+                    network: context.networkId
                 )
                 
                 if let index = sortedWithdrawals.firstIndex(of: scriptStakingCredential.toBytes())
@@ -2102,7 +2099,7 @@ public class TxBuilder<T: Codable & Hashable, Context: ChainContext>: Loggable w
 
         let witnessSet = try tmpBuilder.buildWitnessSet(removeDupScript: true)
 
-        let tx = Transaction<T>(
+        let tx = Transaction(
             transactionBody: txBody,
             transactionWitnessSet: witnessSet,
             valid: true,

@@ -10,7 +10,7 @@ import Testing
 
 @Test("Min Lovelace Ada Only")
 func testMinLovelaceAdaOnly() async throws {
-    let context = MockChainContext<Never>()
+    let context = MockChainContext()
     let protocolParameters = try await context.protocolParameters()
     let result = try await minLovelacePreAlonzo(Value(coin: 2_000_000), context)
     #expect(result == protocolParameters.utxoCostPerByte)
@@ -21,7 +21,7 @@ func testMinLovelaceAdaOnly() async throws {
 struct TestMinLoveLaceMultiAsset {
     @Test("Min Lovelace Multi Asset 1")
     func testMinLovelaceMultiAsset1() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
         let amount = try Value(
             from: [
                 2_000_000,
@@ -34,7 +34,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 2")
     func testMinLovelaceMultiAsset2() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         let amount = try Value(
             from: [
@@ -53,7 +53,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 3")
     func testMinLovelaceMultiAsset3() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         let amount = try Value(
             from: [
@@ -75,7 +75,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 4")
     func testMinLovelaceMultiAsset4() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         let amount = try Value(
             from: [
@@ -93,7 +93,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 5")
     func testMinLovelaceMultiAsset5() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         let amount = try Value(
             from: [
@@ -115,7 +115,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 6")
     func testMinLovelaceMultiAsset6() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         var policy1Assets: [String: Int] = [:]
         var policy2Assets: [String: Int] = [:]
@@ -153,7 +153,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 7")
     func testMinLovelaceMultiAsset7() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         let amount = try Value(
             from: [
@@ -168,7 +168,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 8")
     func testMinLovelaceMultiAsset8() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         let amount = try Value(
             from: [
@@ -189,7 +189,7 @@ struct TestMinLoveLaceMultiAsset {
 
     @Test("Min Lovelace Multi Asset 9")
     func testMinLovelaceMultiAsset9() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         let amount = try Value(
             from: [
@@ -213,18 +213,18 @@ struct TestScriptDataHash {
     @Test("Script Data Hash")
     func testScriptDataHash() throws {
         let unit = SwiftCardanoCore.Unit()
-        let redeemers: Redeemers<SwiftCardanoCore.Unit> = .list([
-            Redeemer<SwiftCardanoCore.Unit>(
+        let redeemers: Redeemers = .list([
+            Redeemer(
                 tag: .spend,
                 index: 0,
-                data: unit,
+                data: try unit.toPlutusData(),
                 exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
             )
         ])
         
         let result = try Utils.scriptDataHash(
             redeemers: redeemers,
-            datums: [.plutusData(unit)]
+            datums: [.plutusData(unit.toPlutusData())]
         )
         let scriptHash = try ScriptDataHash(
             from:
@@ -240,8 +240,8 @@ struct TestScriptDataHash {
     func testScriptDataHashDatumOnly() throws {
         let unit = SwiftCardanoCore.Unit()
         
-        let result = try Utils<Never>.scriptDataHash(
-            datums: [.plutusData(unit)],
+        let result = try Utils.scriptDataHash(
+            datums: [.plutusData(unit.toPlutusData())],
         )
         let scriptHash = try ScriptDataHash(
             from: .string("2f50ea2546f8ce020ca45bfcf2abeb02ff18af2283466f888ae489184b3d2d39")
@@ -252,7 +252,7 @@ struct TestScriptDataHash {
     
     @Test("Script Data Hash with Redeemer Only")
     func testScriptDataHashRedeemerOnly() throws {
-        let result = try Utils<Never>.scriptDataHash(
+        let result = try Utils.scriptDataHash(
             redeemers: .list([])
         )
         let scriptHash = try ScriptDataHash(
@@ -269,7 +269,7 @@ struct TieredReferenceScriptFeeTests {
     
     @Test("Tiered Reference Script Fee")
     func testTieredReferenceScriptFee() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         let result = try await tieredReferenceScriptFee(context, scriptsSize: 80 * 1024)
         #expect(result == 4_489_380)
@@ -277,7 +277,7 @@ struct TieredReferenceScriptFeeTests {
 
     @Test("Tiered Reference Script Fee Exceeds Max Size")
     func testTieredReferenceScriptFeeExceedsMaxSize() async throws {
-        let context = MockChainContext<Never>()
+        let context = MockChainContext()
 
         await #expect(
             throws: CardanoTxBuilderError.valueError(
@@ -289,7 +289,7 @@ struct TieredReferenceScriptFeeTests {
 
     @Test("Tiered Reference Script Fee No Params")
     func testTieredReferenceScriptFeeNoParams() async throws {
-        let context = MockChainContext<Never>(
+        let context = MockChainContext(
             protocolParameters: ProtocolParameters(
                 collateralPercentage: 0,
                 coinsPerUtxoWord: 0,
