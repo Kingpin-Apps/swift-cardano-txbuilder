@@ -315,6 +315,7 @@ public class TxBuilder: Loggable {
         _ script: ScriptOrUTxO,
         redeemer: Redeemer? = nil
     ) throws -> TxBuilder {
+        var modifiedRedeemer = redeemer
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
                 tag != .mint
@@ -324,17 +325,18 @@ public class TxBuilder: Loggable {
             }
             redeemer.tag = .mint
             try consolidateRedeemer(&redeemer)
+            modifiedRedeemer = redeemer
         }
 
         if case let .utxo(utxo) = script {
             guard let outputScript = utxo.output.script else {
                 throw CardanoTxBuilderError.invalidInput("Expected script in UTxO but found none")
             }
-            _mintingScriptToRedeemers.append((outputScript, redeemer))
+            _mintingScriptToRedeemers.append((outputScript, modifiedRedeemer))
             referenceInputs.insert(.utxo(utxo))
             _referenceScripts.append(outputScript)
         } else if case let .script(scriptType) = script {
-            _mintingScriptToRedeemers.append((scriptType, redeemer))
+            _mintingScriptToRedeemers.append((scriptType, modifiedRedeemer))
         }
 
         return self
@@ -350,6 +352,7 @@ public class TxBuilder: Loggable {
         _ script: ScriptOrUTxO,
         redeemer: Redeemer? = nil
     ) throws -> TxBuilder {
+        var modifiedRedeemer = redeemer
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
                 tag != .reward
@@ -359,17 +362,18 @@ public class TxBuilder: Loggable {
             }
             redeemer.tag = .reward
             try consolidateRedeemer(&redeemer)
+            modifiedRedeemer = redeemer
         }
 
         if case let .utxo(utxo) = script {
             guard let outputScript = utxo.output.script else {
                 throw CardanoTxBuilderError.invalidInput("Expected script in UTxO but found none")
             }
-            _withdrawalScriptToRedeemers.append((outputScript, redeemer))
+            _withdrawalScriptToRedeemers.append((outputScript, modifiedRedeemer))
             referenceInputs.insert(.utxo(utxo))
             _referenceScripts.append(outputScript)
         } else if case let .script(scriptType) = script {
-            _withdrawalScriptToRedeemers.append((scriptType, redeemer))
+            _withdrawalScriptToRedeemers.append((scriptType, modifiedRedeemer))
         }
 
         return self
@@ -387,6 +391,7 @@ public class TxBuilder: Loggable {
         _ script: ScriptOrUTxO,
         redeemer: Redeemer? = nil
     ) throws -> TxBuilder {
+        var modifiedRedeemer = redeemer
         if var redeemer = redeemer {
             if let tag = redeemer.tag,
                 tag != .cert
@@ -406,17 +411,18 @@ public class TxBuilder: Loggable {
             redeemer.index = certificates.count - 1
             redeemer.tag = .cert
             try consolidateRedeemer(&redeemer)
+            modifiedRedeemer = redeemer
         }
 
         if case let .utxo(utxo) = script {
             guard let outputScript = utxo.output.script else {
                 throw CardanoTxBuilderError.invalidInput("Expected script in UTxO but found none")
             }
-            _certificateScriptToRedeemers.append((outputScript, redeemer))
+            _certificateScriptToRedeemers.append((outputScript, modifiedRedeemer))
             referenceInputs.insert(.utxo(utxo))
             _referenceScripts.append(outputScript)
         } else if case let .script(scriptType) = script {
-            _certificateScriptToRedeemers.append((scriptType, redeemer))
+            _certificateScriptToRedeemers.append((scriptType, modifiedRedeemer))
         }
 
         return self
@@ -1338,7 +1344,7 @@ public class TxBuilder: Loggable {
     }
 
     private func getTotalKeyDeposit() async throws -> Int {
-        var stakeRegistrationCerts = Set<Credential>()
+        var stakeRegistrationCerts = Set<StakeCredential>()
         var stakeRegistrationCertsWithExplicitDeposit = Set<Int>()
         var stakePoolRegistrationCerts = Set<PoolKeyHash>()
 
@@ -1349,7 +1355,7 @@ public class TxBuilder: Loggable {
                 switch cert {
                     case .stakeRegistration(let reg):
                         stakeRegistrationCerts.insert(
-                            Credential(credential: reg.stakeCredential.credential)
+                            StakeCredential(credential: reg.stakeCredential.credential)
                         )
                     case .registerDRep(let reg):
                         stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
@@ -1590,7 +1596,7 @@ public class TxBuilder: Loggable {
     }
 
     private func buildFullFakeTx() async throws -> Transaction {
-        var txBody = try! await buildTxBody()
+        var txBody = try await buildTxBody()
 
         if txBody.fee == 0 {
             // When fee is not specified, we will use max possible fee to fill in the fee field.
@@ -1725,8 +1731,8 @@ public class TxBuilder: Loggable {
     private func certificateVkeyHashes() -> Set<VerificationKeyHash> {
         var results = Set<VerificationKeyHash>()
 
-        func checkAndAddVkey(_ stakeCredential: StakeCredential) {
-            if case .verificationKeyHash(let vkeyHash) = stakeCredential.credential {
+        func checkAndAddVkey(_ credential: any Credential) {
+            if case .verificationKeyHash(let vkeyHash) = credential.credential {
                 results.insert(vkeyHash)
             }
         }
@@ -1875,7 +1881,7 @@ public class TxBuilder: Loggable {
                 if let index = sortedMintPolicies.firstIndex(of: try! scriptHash(script: script)) {
                     _mintingScriptToRedeemers = _mintingScriptToRedeemers.map { (s, r) in
                         if s == script {
-                            let newRedeemer = r
+                            var newRedeemer = r
                             newRedeemer?.index = index
                             return (s, newRedeemer)
                         }
@@ -1887,7 +1893,7 @@ public class TxBuilder: Loggable {
 
         // Set withdrawal redeemer indices
         for (script, redeemer) in _withdrawalScriptToRedeemers {
-            if let redeemer = redeemer {
+            if var redeemer = redeemer {
                 let scriptStakingCredential = try Address(
                     stakingPart: .scriptHash(try! scriptHash(script: script)),
                     network: context.networkId
@@ -1896,6 +1902,13 @@ public class TxBuilder: Loggable {
                 if let index = sortedWithdrawals.firstIndex(of: scriptStakingCredential.toBytes())
                 {
                     redeemer.index = index
+                    // Update the array with the modified redeemer
+                    _withdrawalScriptToRedeemers = _withdrawalScriptToRedeemers.map { (s, r) in
+                        if s == script {
+                            return (s, redeemer)
+                        }
+                        return (s, r)
+                    }
                 }
             }
         }
@@ -2057,7 +2070,7 @@ public class TxBuilder: Loggable {
                 collateralChangeAddress: collateralChangeAddress
             )
 
-            for redeemer in _redeemerList {
+            for var redeemer in _redeemerList {
                 guard let tag = redeemer.tag else {
                     throw CardanoTxBuilderError.invalidState(
                         "Expected tag of redeemer to be set, but found nil")
@@ -2077,6 +2090,48 @@ public class TxBuilder: Loggable {
                     mem: Int(Double(exUnits.mem) * (1 + executionMemoryBuffer)),
                     steps: Int(Double(exUnits.steps) * (1 + executionStepBuffer))
                 )
+                
+                // Update the redeemer in its original storage location
+                switch tag {
+                case .spend:
+                    // Find and update the corresponding UTxO's redeemer
+                    for (utxo, storedRedeemer) in _inputsToRedeemers {
+                        if storedRedeemer.index == redeemer.index && storedRedeemer.tag == .spend {
+                            _inputsToRedeemers[utxo] = redeemer
+                            break
+                        }
+                    }
+                case .mint:
+                    // Update the minting script redeemer
+                    _mintingScriptToRedeemers = _mintingScriptToRedeemers.map { (script, storedRedeemer) in
+                        if let storedRedeemer = storedRedeemer,
+                           storedRedeemer.index == redeemer.index && storedRedeemer.tag == .mint {
+                            return (script, redeemer)
+                        }
+                        return (script, storedRedeemer)
+                    }
+                case .cert:
+                    // Update the certificate script redeemer
+                    _certificateScriptToRedeemers = _certificateScriptToRedeemers.map { (script, storedRedeemer) in
+                        if let storedRedeemer = storedRedeemer,
+                           storedRedeemer.index == redeemer.index && storedRedeemer.tag == .cert {
+                            return (script, redeemer)
+                        }
+                        return (script, storedRedeemer)
+                    }
+                case .reward:
+                    // Update the withdrawal script redeemer
+                    _withdrawalScriptToRedeemers = _withdrawalScriptToRedeemers.map { (script, storedRedeemer) in
+                        if let storedRedeemer = storedRedeemer,
+                           storedRedeemer.index == redeemer.index && storedRedeemer.tag == .reward {
+                            return (script, redeemer)
+                        }
+                        return (script, storedRedeemer)
+                    }
+                case .voting, .proposing:
+                    // TODO: Add support for voting and proposing redeemers when storage is implemented
+                    break
+                }
             }
         }
     }

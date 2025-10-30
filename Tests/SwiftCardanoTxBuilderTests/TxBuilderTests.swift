@@ -309,7 +309,7 @@ struct TxBuilderTests {
         }
         
         #expect(String(describing: error).contains("coin: 991161321"))
-        #expect(String(describing: error).contains("AssetName(NewToken): 1"))
+        #expect(String(describing: error).contains("\"4e6577546f6b656e\" : 1"))
     }
     
     @Test(.disabled("Flaky when run with other tests - stderr capture is not reliable in parallel test execution"))
@@ -345,7 +345,7 @@ struct TxBuilderTests {
             }
             
             #expect(String(describing: error).contains("coin: 991161321"))
-            #expect(String(describing: error).contains("AssetName(NewToken): 1"))
+            #expect(String(describing: error).contains("\"4e6577546f6b656e\" : 1"))
         }
         #expect(output.localizedCaseInsensitiveContains("Input UTxOs depleted!"))
     }
@@ -958,7 +958,18 @@ struct TxBuilderTests {
         let expectedDatum: ListOrNonEmptyOrderedSet = .nonEmptyOrderedSet(
             NonEmptyOrderedSet([datum])
         )
-        let expectedRedeemers: Redeemers = .list([redeemer1, redeemer2])
+        let expectedRedeemers: Redeemers = .list([
+            Redeemer(
+                tag: RedeemerTag.spend,
+                data: try Unit().toPlutusData(),
+                exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
+            ),
+            Redeemer(
+                tag: RedeemerTag.mint,
+                data: try Unit().toPlutusData(),
+                exUnits: ExecutionUnits(mem: 5_000_000, steps: 1_000_000)
+            )
+        ])
         let expectedPlutusV1Script: ListOrNonEmptyOrderedSet = .nonEmptyOrderedSet(
             NonEmptyOrderedSet([plutusScript])
         )
@@ -1033,7 +1044,13 @@ struct TxBuilderTests {
         let expectedDatum: ListOrNonEmptyOrderedSet = .nonEmptyOrderedSet(
             NonEmptyOrderedSet([datum])
         )
-        let expectedRedeemers: Redeemers = .list([redeemer])
+        let expectedRedeemers: Redeemers = .list([
+            Redeemer(
+                tag: RedeemerTag.spend,
+                data: try Unit().toPlutusData(),
+                exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
+            )
+        ])
         
         #expect(expectedDatum == witnesses.plutusData)
         #expect(expectedRedeemers == witnesses.redeemers)
@@ -1245,7 +1262,13 @@ struct TxBuilderTests {
         let expectedDatum: ListOrNonEmptyOrderedSet = .nonEmptyOrderedSet(
             NonEmptyOrderedSet([datum])
         )
-        let expectedRedeemers: Redeemers = .list([redeemer])
+        let expectedRedeemers: Redeemers = .list([
+            Redeemer(
+                tag: RedeemerTag.spend,
+                data: try Unit().toPlutusData(),
+                exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
+            )
+        ])
         
         #expect(expectedDatum == witnesses.plutusData)
         #expect(expectedRedeemers == witnesses.redeemers)
@@ -1665,7 +1688,13 @@ struct TxBuilderTests {
         txBuilder.useRedeemerMap = false
         let witnesses = try txBuilder.buildWitnessSet()
         
-        let expectedRedeemers: Redeemers = .list([redeemer])
+        let expectedRedeemers: Redeemers = .list([
+            Redeemer(
+                tag: RedeemerTag.mint,
+                data: try Unit().toPlutusData(),
+                exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
+            )
+        ])
         
         #expect(witnesses.plutusData == nil)
         #expect(expectedRedeemers == witnesses.redeemers)
@@ -2382,14 +2411,20 @@ struct TxBuilderTests {
         let expectedDatum: ListOrNonEmptyOrderedSet = .nonEmptyOrderedSet(
             NonEmptyOrderedSet([datum])
         )
-        let expectedRedeemers: Redeemers = .list([redeemer])
+        let expectedRedeemers: Redeemers = .list([
+            Redeemer(
+                tag: RedeemerTag.spend,
+                data: try Unit().toPlutusData(),
+                exUnits: ExecutionUnits(mem: 479858, steps: 211128864)
+            )
+        
+        ])
         let expectedPlutusV1Script: ListOrNonEmptyOrderedSet = .nonEmptyOrderedSet(
             NonEmptyOrderedSet([plutusScript])
         )
         
         #expect(expectedDatum == witnesses.plutusData)
         #expect(expectedRedeemers == witnesses.redeemers)
-        #expect(redeemer.exUnits != nil)
         #expect(expectedPlutusV1Script == witnesses.plutusV1Script)
     }
     
@@ -2635,7 +2670,14 @@ struct TxBuilderTests {
         txBuilder.useRedeemerMap = false
         let witnesses = try txBuilder.buildWitnessSet()
         
-        let expectedRedeemers: Redeemers = .list([redeemer])
+        let expectedRedeemers: Redeemers = .list([
+            Redeemer(
+                tag: RedeemerTag.cert,
+                index: 1,
+                data: try Unit().toPlutusData(),
+                exUnits: ExecutionUnits(mem: 100_000, steps: 1_000_000)
+            )
+        ])
         let expectedPlutusV2Script: ListOrNonEmptyOrderedSet = .nonEmptyOrderedSet(
             NonEmptyOrderedSet([
                 plutusScript
@@ -2735,7 +2777,14 @@ struct TxBuilderTests {
         txBuilder.useRedeemerMap = false
         let witnesses = try txBuilder.buildWitnessSet()
         
-        let expectedRedeemers: Redeemers = .list([redeemer])
+        let expectedRedeemers: Redeemers = .list([
+            Redeemer(
+                tag: RedeemerTag.cert,
+                index: 1,
+                data: try Unit().toPlutusData(),
+                exUnits: ExecutionUnits(mem: 100_000, steps: 1_000_000)
+            )
+        ])
         
         let expectedReferenceInputs: ListOrNonEmptyOrderedSet = .nonEmptyOrderedSet(
             NonEmptyOrderedSet([
