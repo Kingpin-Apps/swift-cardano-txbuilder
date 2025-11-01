@@ -6,7 +6,7 @@ import Testing
 @testable import SwiftCardanoTxBuilder
 
 // Test address
-nonisolated(unsafe) private let address = try! Address(
+private let address = try! Address(
     from: .string("addr_test1vrm9x2zsux7va6w892g38tvchnzahvcd9tykqf3ygnmwtaqyfg52x")
 )
 
