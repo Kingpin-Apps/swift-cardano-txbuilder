@@ -15,6 +15,8 @@ class MockChainContext: ChainContext {
 
     public var _utxos: [UTxO]?
     
+    public var _stakeAddressInfo: [StakeAddressInfo]?
+    
     var protocolParameters: () async throws -> SwiftCardanoCore.ProtocolParameters {
         
         if self._protocolParameters == nil {
@@ -116,6 +118,9 @@ class MockChainContext: ChainContext {
     }
 
     func stakeAddressInfo(address: SwiftCardanoCore.Address) async throws -> [StakeAddressInfo] {
+        if let injected = _stakeAddressInfo {
+            return injected
+        }
         return []
     }
 
@@ -197,6 +202,32 @@ let stakeSigningKeyFilePath = (
     inDirectory: "data"
 )
 
+var stakeVerificationKey: StakeVerificationKey? {
+    do {
+        let keyPath = try getFilePath(
+            forResource: stakeVerificationKeyFilePath.forResource,
+            ofType: stakeVerificationKeyFilePath.ofType,
+            inDirectory: stakeVerificationKeyFilePath.inDirectory
+        )
+        return try StakeVerificationKey.load(from: keyPath!)
+    } catch {
+        return nil
+    }
+}
+
+var stakeSigningKey: StakeSigningKey? {
+    do {
+        let keyPath = try getFilePath(
+            forResource: stakeSigningKeyFilePath.forResource,
+            ofType: stakeSigningKeyFilePath.ofType,
+            inDirectory: stakeSigningKeyFilePath.inDirectory
+        )
+        return try StakeSigningKey.load(from: keyPath!)
+    } catch {
+        return nil
+    }
+}
+
 var poolParams: PoolParams {
     return PoolParams(
         poolOperator: PoolKeyHash(payload: Data(repeating: 0x31, count: POOL_KEY_HASH_SIZE)),
@@ -231,6 +262,46 @@ var poolParams: PoolParams {
             url: try! Url("https://meta1.example.com"),
             poolMetadataHash: PoolMetadataHash(payload: Data(repeating: 0x31, count: POOL_METADATA_HASH_SIZE))
         )
+    )
+}
+
+/// Pool operator derived from poolParams for delegation tests
+var poolOperator: PoolOperator {
+    return PoolOperator(poolKeyHash: poolParams.poolOperator)
+}
+
+/// DRep credential fixture using deterministic key hash for governance tests
+var drepCredential: DRepCredential {
+    // Use deterministic bytes for test DRep credential (derived from repeating pattern)
+    return DRepCredential(
+        credential: .verificationKeyHash(VerificationKeyHash(payload: Data(repeating: 0x42, count: VERIFICATION_KEY_HASH_SIZE)))
+    )
+}
+
+/// Governance anchor fixture with test URL and metadata hash
+var anchor: Anchor {
+    return Anchor(
+        anchorUrl: try! Url("https://example.com/governance-metadata.json"),
+        anchorDataHash: AnchorDataHash(payload: Data(repeating: 0x51, count: 32))
+    )
+}
+
+/// DRep value using the drepCredential for delegation tests
+var drep: DRep {
+    return DRep(credential: try! DRepType(from: drepCredential))
+}
+
+/// Committee cold credential fixture using deterministic key hash
+var committeeColdCredential: CommitteeColdCredential {
+    return CommitteeColdCredential(
+        credential: .verificationKeyHash(VerificationKeyHash(payload: Data(repeating: 0x61, count: VERIFICATION_KEY_HASH_SIZE)))
+    )
+}
+
+/// Committee hot credential fixture using deterministic key hash
+var committeeHotCredential: CommitteeHotCredential {
+    return CommitteeHotCredential(
+        credential: .verificationKeyHash(VerificationKeyHash(payload: Data(repeating: 0x62, count: VERIFICATION_KEY_HASH_SIZE)))
     )
 }
     

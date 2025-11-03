@@ -27,13 +27,63 @@ import SwiftCardanoCore
 import SwiftCardanoChain
 
 // Initialize BlockFrost chain context
-let chainContext = try await BlockFrostChainContext<Never>(
+let chainContext = try await BlockFrostChainContext(
     network: .preview,
     environmentVariable: "BLOCKFROST_API_KEY"
 )
 
 // Create transaction builder
-let txBuilder = TxBuilder<Never, BlockFrostChainContext>(context: chainContext)
+let txBuilder = TxBuilder(context: chainContext)
+```
+
+### Address Basics
+
+Addresses are fundamental to Cardano transactions:
+
+```swift
+import SwiftCardanoCore
+
+// Create address from bech32 string
+let paymentAddress = try Address(from: .string("addr_test1vr..."))
+
+// Create stake address from stake verification key
+let stakeVKey = try StakeVerificationKey.load(from: "path/to/stake.vkey")
+let stakeAddress = try Address(
+    stakingPart: .verificationKeyHash(try stakeVKey.hash()),
+    network: .testnet
+)
+
+// Create base address (payment + staking credentials)
+let paymentVKey = try PaymentVerificationKey.load(from: "path/to/payment.vkey")
+let baseAddress = try Address(
+    paymentPart: .verificationKeyHash(try paymentVKey.hash()),
+    stakingPart: .verificationKeyHash(try stakeVKey.hash()),
+    network: .testnet
+)
+```
+
+### Signing Keys
+
+The library uses a `SigningKeyType` enum to wrap different key types:
+
+```swift
+import SwiftCardanoCore
+
+// Load normal signing keys
+let paymentSKey = try PaymentSigningKey.load(from: "path/to/payment.skey")
+let stakeSKey = try StakeSigningKey.load(from: "path/to/stake.skey")
+
+// Wrap in SigningKeyType for use with transaction helpers
+let signingKeys: [SigningKeyType] = [
+    .signingKey(paymentSKey),
+    .signingKey(stakeSKey)
+]
+
+// For extended signing keys (HD wallets)
+let extendedKey = try PaymentExtendedSigningKey.load(from: "path/to/payment.xskey")
+let extendedSigningKeys: [SigningKeyType] = [
+    .extendedSigningKey(extendedKey)
+]
 ```
 
 ## Basic Transaction Building
@@ -116,16 +166,16 @@ For transactions involving smart contracts:
 
 ```swift
 // Initialize with PlutusData redeemer type
-let chainContext = try await BlockFrostChainContext<PlutusData>(
+let chainContext = try await BlockFrostChainContext(
     network: .preview,
     environmentVariable: "BLOCKFROST_API_KEY"
 )
-let txBuilder = TxBuilder<PlutusData, BlockFrostChainContext>(context: chainContext)
+let txBuilder = TxBuilder(context: chainContext)
 
 // Create script components
 let plutusScript = PlutusV2Script(data: Data("script bytes".utf8))
 let datum = PlutusData()
-let redeemer = Redeemer<PlutusData>(
+let redeemer = Redeemer(
     data: PlutusData(),
     exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
 )
@@ -160,7 +210,7 @@ txBuilder.mint = try MultiAsset(from: [
 ])
 
 // Add minting script with redeemer
-let mintRedeemer = Redeemer<PlutusData>(
+let mintRedeemer = Redeemer(
     data: PlutusData(),
     exUnits: ExecutionUnits(mem: 1_000_000, steps: 1_000_000)
 )
@@ -169,6 +219,9 @@ try txBuilder.addMintingScript(
     .script(.plutusV2Script(plutusScript)),
     redeemer: mintRedeemer
 )
+
+// Add input address for fees
+txBuilder.addInputAddress(.address(senderAddress))
 
 // Send minted tokens to recipient
 try txBuilder.addOutput(
@@ -184,9 +237,109 @@ try txBuilder.addOutput(
 let txBody = try await txBuilder.build(changeAddress: senderAddress)
 ```
 
+### Stake Transactions
+
+The library provides convenient helper methods for common staking operations:
+
+#### Register Stake Address
+
+```swift
+let stakeVKey = try StakeVerificationKey.load(from: "path/to/stake.vkey")
+let paymentSKey = try PaymentSigningKey.load(from: "path/to/payment.skey")
+let stakeSKey = try StakeSigningKey.load(from: "path/to/stake.skey")
+let feePaymentAddress = try Address(from: .string("addr_test1vr..."))
+
+let tx = try await txBuilder.transactions.stakeAddressRegistration(
+    stakeVerificationKey: stakeVKey,
+    feePaymentAddress: feePaymentAddress,
+    signingKeys: [
+        .signingKey(paymentSKey),
+        .signingKey(stakeSKey)
+    ]
+)
+
+let txId = try await chainContext.submitTx(tx: .transaction(tx))
+```
+
+#### Delegate Stake to Pool
+
+```swift
+let poolKeyHash = try PoolKeyHash(from: .string("pool1..."))
+let poolOperator = PoolOperator(poolKeyHash: poolKeyHash)
+
+let tx = try await txBuilder.transactions.stakeDelegation(
+    stakeVerificationKey: stakeVKey,
+    poolOperator: poolOperator,
+    feePaymentAddress: feePaymentAddress,
+    signingKeys: [
+        .signingKey(paymentSKey),
+        .signingKey(stakeSKey)
+    ]
+)
+
+let txId = try await chainContext.submitTx(tx: .transaction(tx))
+```
+
+#### Withdraw Staking Rewards
+
+```swift
+let receiverAddress = try Address(from: .string("addr_test1vq..."))
+
+let tx = try await txBuilder.transactions.withdrawRewards(
+    from: stakeVKey,
+    to: receiverAddress,  // Optional: omit to merge with change
+    feePaymentAddress: feePaymentAddress,
+    signingKeys: [
+        .signingKey(paymentSKey),
+        .signingKey(stakeSKey)
+    ]
+)
+
+let txId = try await chainContext.submitTx(tx: .transaction(tx))
+```
+
+#### Delegate Vote to DRep
+
+```swift
+let drepCredential = DRepCredential(
+    credential: .verificationKeyHash(
+        try VerificationKeyHash(from: .string("drep1..."))
+    )
+)
+let drep = try DRep(credential: DRepType(from: drepCredential))
+
+let tx = try await txBuilder.transactions.voteDelegation(
+    stakeVerificationKey: stakeVKey,
+    drep: drep,
+    feePaymentAddress: feePaymentAddress,
+    signingKeys: [
+        .signingKey(paymentSKey),
+        .signingKey(stakeSKey)
+    ]
+)
+
+let txId = try await chainContext.submitTx(tx: .transaction(tx))
+```
+
+#### Register and Delegate in One Transaction
+
+```swift
+let tx = try await txBuilder.transactions.stakeAddressRegistrationAndDelegation(
+    stakeVerificationKey: stakeVKey,
+    poolOperator: poolOperator,
+    feePaymentAddress: feePaymentAddress,
+    signingKeys: [
+        .signingKey(paymentSKey),
+        .signingKey(stakeSKey)
+    ]
+)
+
+let txId = try await chainContext.submitTx(tx: .transaction(tx))
+```
+
 ### Certificates and Governance
 
-Include certificates for stake pool operations or governance actions:
+For advanced stake pool operations or governance actions, use certificates directly:
 
 ```swift
 // Stake pool registration
@@ -291,11 +444,11 @@ Use `Never` when your transaction doesn't involve any Plutus scripts:
 
 ```swift
 // For simple ADA transfers, token transfers without scripts
-let chainContext = try await BlockFrostChainContext<Never>(
+let chainContext = try await BlockFrostChainContext(
     network: .preview,
     environmentVariable: "BLOCKFROST_API_KEY"
 )
-let txBuilder = TxBuilder<Never, BlockFrostChainContext>(context: chainContext)
+let txBuilder = TxBuilder(context: chainContext)
 
 // These transactions don't require redeemers:
 // - Basic ADA transfers
@@ -310,11 +463,11 @@ Use `PlutusData` when working with Plutus scripts:
 
 ```swift
 // For transactions involving Plutus scripts
-let chainContext = try await BlockFrostChainContext<PlutusData>(
+let chainContext = try await BlockFrostChainContext(
     network: .preview,
     environmentVariable: "BLOCKFROST_API_KEY"
 )
-let txBuilder = TxBuilder<PlutusData, BlockFrostChainContext>(context: chainContext)
+let txBuilder = TxBuilder(context: chainContext)
 
 // These transactions require PlutusData redeemers:
 // - Spending from Plutus script addresses
@@ -345,11 +498,11 @@ struct MyRedeemer: CBORSerializable, Hashable {
 }
 
 // Use with TxBuilder
-let chainContext = try await BlockFrostChainContext<MyRedeemer>(
+let chainContext = try await BlockFrostChainContext(
     network: .preview,
     environmentVariable: "BLOCKFROST_API_KEY"
 )
-let txBuilder = TxBuilder<MyRedeemer, BlockFrostChainContext>(context: chainContext)
+let txBuilder = TxBuilder(context: chainContext)
 ```
 
 ## Transaction Submission
@@ -359,14 +512,13 @@ Once you've built a transaction, you need to sign it and submit it to the blockc
 ### Building and Preparing for Submission
 
 ```swift
-// Build the transaction to sign later
+// Build the transaction to get the body
 let transactionBody = try await txBuilder.build(changeAddress: senderAddress)
 
 // Create a transaction with the body (witness set will be empty initially)
-let unsignedTransaction = Transaction<Never>(
-    body: transactionBody,
-    witnessSet: txBuilder.buildWitnessSet(),
-    isValid: true,
+let unsignedTransaction = Transaction(
+    transactionBody: transactionBody,
+    transactionWitnessSet: try txBuilder.buildWitnessSet(),
     auxiliaryData: nil
 )
 ```
@@ -376,22 +528,21 @@ let unsignedTransaction = Transaction<Never>(
 Before submitting, you need to sign the transaction with the appropriate private keys:
 
 ```swift
-// Build the signed transaction
-// You need your signing keys
-
+// Option 1: Build and sign in one step
 let paymentSigningKey = try PaymentSigningKey.load(from: "path/to/payment.skey")
 let signedTransaction = try await txBuilder.buildAndSign(
-    signingKeys: [.signingKey(paymentSigningKey)], 
+    signingKeys: [.signingKey(paymentSigningKey)],
     changeAddress: senderAddress
 )
 
-// Or manually sign a pre-built transaction
+// Option 2: Manually sign a pre-built transaction
+var witnessSet = try txBuilder.buildWitnessSet()
 var vkeyWitnesses = [] as [VerificationKeyWitness]
+
 let vkey: any VerificationKeyProtocol = try paymentSigningKey.toVerificationKey()
-let vkeyHash: VerificationKeyHash = try vkey.hash()
 let vkeyType: VerificationKeyType = try paymentSigningKey.toVerificationKeyType()
 let signature = try paymentSigningKey.sign(
-    data: unsignedTransaction.transactionBody.hash()
+    data: transactionBody.hash()
 )
 vkeyWitnesses.append(
     VerificationKeyWitness(
@@ -399,10 +550,16 @@ vkeyWitnesses.append(
         signature: signature
     )
 )
-unsignedTransaction.witnessSet.vkeyWitnesses = .nonEmptyOrderedSet(
+
+witnessSet.vkeyWitnesses = .nonEmptyOrderedSet(
     NonEmptyOrderedSet(vkeyWitnesses)
 )
-let signedTransaction = unsignedTransaction  // Now signed
+
+let signedTransaction = Transaction(
+    transactionBody: transactionBody,
+    transactionWitnessSet: witnessSet,
+    auxiliaryData: nil
+)
 ```
 
 ### Submitting to the Blockchain
@@ -445,23 +602,23 @@ let txId = try await chainContext.submitTxCBOR(cbor: cborData)
 
 ```swift
 // 1. Initialize chain context and builder
-let chainContext = try await BlockFrostChainContext<Never>(
+let chainContext = try await BlockFrostChainContext(
     network: .preview,
     environmentVariable: "BLOCKFROST_API_KEY"
 )
-let txBuilder = TxBuilder<Never, BlockFrostChainContext>(context: chainContext)
+let txBuilder = TxBuilder(context: chainContext)
 
 let paymentSigningKey = try PaymentSigningKey.load(from: "path/to/payment.skey")
 
-// 2. Build signed transaction
-let txBody = try await txBuilder
+// 2. Build and sign transaction
+let signedTransaction = try await txBuilder
     .addInputAddress(.address(senderAddress))
     .addOutput(TransactionOutput(
         address: receiverAddress,
         amount: Value(coin: 2_000_000)
     ))
     .buildAndSign(
-        signingKeys: [.signingKey(paymentSigningKey)], 
+        signingKeys: [.signingKey(paymentSigningKey)],
         changeAddress: senderAddress
     )
 
@@ -499,6 +656,10 @@ do {
 ```
 
 ## Topics
+
+### Getting Started
+
+- <doc:TransactionHelpers>
 
 ### Core Components
 

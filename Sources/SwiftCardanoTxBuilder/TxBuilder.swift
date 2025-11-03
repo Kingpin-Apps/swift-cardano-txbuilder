@@ -2226,3 +2226,16 @@ public class TxBuilder: Loggable {
         }
     }
 }
+
+
+public extension TxBuilder {
+    
+    /// Access to simple transaction building methods
+    var transactions: Transactions {
+        return Transactions(txBuilder: self)
+    }
+    
+    struct Transactions {
+        let txBuilder: TxBuilder
+    }
+}
