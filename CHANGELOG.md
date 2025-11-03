@@ -1,3 +1,9 @@
+## 0.2.0 (2025-11-03)
+
+### Feat
+
+- add transactions and tests
+
 ## 0.1.5 (2025-11-01)
 
 ### Fix
