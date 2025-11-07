@@ -7,12 +7,6 @@ struct AuthCommitteeHotTests {
     
     @Test func testAuthCommitteeHot() async throws {
         let chainContext = MockChainContext()
-        
-        guard paymentVerificationKey != nil else {
-            Issue.record("Failed to load payment verification key")
-            return
-        }
-        
         let feePaymentAddress = try Address(from: .string("addr_test1vrm9x2zsux7va6w892g38tvchnzahvcd9tykqf3ygnmwtaqyfg52x"))
         
         let coldCred = committeeColdCredential

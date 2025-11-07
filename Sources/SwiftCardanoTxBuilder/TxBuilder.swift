@@ -150,6 +150,7 @@ public class TxBuilder: Loggable {
                 certificates: [Certificate]? = nil,
                 withdrawals: Withdrawals? = nil,
                 collateralReturnThreshold: Int? = nil,
+                logger: Logger? = nil,
     ) {
         self.context = context
         self.utxoSelectors = utxoSelectors
@@ -167,8 +168,12 @@ public class TxBuilder: Loggable {
         self.certificates = certificates
         self.withdrawals = withdrawals
         
-        self.logger = Logger(label: "com.swift-cardano-txbuilder")
-        setupLogging()
+        if let logger = logger {
+            self.logger = logger
+        } else {
+            self.logger = Logger(label: "com.swift-cardano-txbuilder")
+            setupLogging()
+        }
     }
 
     // MARK: - Public Methods
