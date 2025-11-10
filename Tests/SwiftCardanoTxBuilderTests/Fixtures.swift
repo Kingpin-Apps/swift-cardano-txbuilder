@@ -11,6 +11,8 @@ import SwiftCardanoCore
 // MARK: - Mock Classes
 
 class MockChainContext: ChainContext {
+    var name: String = "MockChainContext"
+
     public var _protocolParameters: ProtocolParameters?
 
     public var _utxos: [UTxO]?

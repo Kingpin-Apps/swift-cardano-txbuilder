@@ -39,7 +39,7 @@ public extension TxBuilder.Transactions {
         plutusV2Script: ListOrNonEmptyOrderedSet<PlutusV2Script>? = nil,
         plutusV3Script: ListOrNonEmptyOrderedSet<PlutusV3Script>? = nil
     ) -> Transaction {
-        var tx = transaction // struct copy
+        let tx = transaction // struct copy
         var ws = tx.transactionWitnessSet
         
         if let vkeyWitnesses {
@@ -75,11 +75,17 @@ public extension TxBuilder.Transactions {
             ws.plutusV3Script = _updateWitnessSet(existing: ws.plutusV3Script, toAdd: plutusV3Script)
         }
         
-        tx.transactionWitnessSet = ws
-        return tx
+        // Return a new Transaction with properly updated _payload
+        return Transaction(
+            transactionBody: tx.transactionBody,
+            transactionWitnessSet: ws,
+            valid: tx.valid,
+            auxiliaryData: tx.auxiliaryData
+        )
     }
     
     /// Helper function to merge witness sets by concatenating lists.
+    /// Preserves insertion order: existing witnesses first, then new witnesses.
     /// - Parameters:
     ///   - existing: The existing witness set (may be nil).
     ///   - toAdd: The new witnesses to add (may be nil).

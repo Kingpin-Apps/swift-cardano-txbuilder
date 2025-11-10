@@ -2921,7 +2921,7 @@ struct TxBuilderTests {
         )
 
         let withdrawals = Withdrawals([
-            RewardAccount(stakeAddress.toBytes()): Coin(10000)
+            RewardAccount(stakeAddress.toBytes()): Coin(10_000)
         ])
         txBuilder.withdrawals = withdrawals
 
@@ -2953,7 +2953,7 @@ struct TxBuilderTests {
                     0xa9, 0xfd, 0x0c, 0xdc, 0x99, 0x97, 0x58, 0x99,
                     0x47, 0x0c, 0x21, 0x9b, 0xdc, 0x0d, 0x82, 0x8c,
                     0xfa, 0x6d, 0xdf, 0x6d, 0x69
-                ])): .int(10_000),
+                ])): .uint(10_000),
             ])
         ])
         
