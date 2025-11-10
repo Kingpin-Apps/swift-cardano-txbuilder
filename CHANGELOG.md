@@ -1,3 +1,9 @@
+## 0.2.2 (2025-11-10)
+
+### Fix
+
+- update dependencies and fix assemble
+
 ## 0.2.1 (2025-11-07)
 
 ### Fix
