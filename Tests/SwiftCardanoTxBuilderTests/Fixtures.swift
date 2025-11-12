@@ -64,6 +64,12 @@ class MockChainContext: ChainContext {
         }
     }
 
+    var era: () async throws -> Era? {
+        return {
+            .conway
+        }
+    }
+
     var lastBlockSlot: () async throws -> Int {
         return {
             2000
@@ -124,6 +130,15 @@ class MockChainContext: ChainContext {
             return injected
         }
         return []
+    }
+
+    func stakePools() async throws -> [String] {
+        return [
+            "pool1qqa8tkycj4zck4sy7n8mqr22x5g7tvm8hnp9st95wmuvvtw28th",
+            "pool1qzq896ke4meh0tn9fl0dcnvtn2rzdz75lk3h8nmsuew8z5uln7r",
+            "pool1qzhrd5sd0v0r6q2kqmaz07tvgry72whcjw0xsmnttgyuxtzpkkx",
+            "pool1qrjk9dqdaydy207lw4hf3zlxxg2qlxvxp9kvxx9fscccgwmgfv9",
+        ]
     }
 
     init() {}
