@@ -80,7 +80,7 @@ public class LargestFirstSelector: UTxOSelector {
         var available = utxos.sorted {
             $0.output.lovelace > $1.output.lovelace
         }
-        let maxFee = includeMaxFee ? try await maxTxFee(context) : 0
+        let maxFee = includeMaxFee ? try await Utils.maxTxFee(context) : 0
         var totalRequested = Value(coin: Int(maxFee))
 
         for output in outputs {
@@ -107,7 +107,7 @@ public class LargestFirstSelector: UTxOSelector {
 
         if respectMinUtxo {
             let change = selectedAmount - totalRequested
-            let minChangeAmount = try await minLovelacePostAlonzo(
+            let minChangeAmount = try await Utils.minLovelacePostAlonzo(
                 TransactionOutput(address: FakeAddress.address, amount: change),
                 context
             )
@@ -307,7 +307,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
     ) async throws -> ([UTxO], Value) {
         // Shallow copy the list
         var remaining = utxos
-        let maxFee = includeMaxFee ? try await maxTxFee(context) : 0
+        let maxFee = includeMaxFee ? try await Utils.maxTxFee(context) : 0
         var requestSum = Value(coin: Int(maxFee))
 
         for output in outputs {
@@ -364,7 +364,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
 
         if respectMinUtxo {
             let change = selectedAmount - requestSum
-            let minChangeAmount = try await minLovelacePostAlonzo(
+            let minChangeAmount = try await Utils.minLovelacePostAlonzo(
                 TransactionOutput(address: FakeAddress.address, amount: change),
                 context
             )

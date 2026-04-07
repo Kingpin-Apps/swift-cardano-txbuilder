@@ -12,7 +12,7 @@ import Testing
 func testMinLovelaceAdaOnly() async throws {
     let context = MockChainContext()
     let protocolParameters = try await context.protocolParameters()
-    let result = try await minLovelacePreAlonzo(Value(coin: 2_000_000), context)
+    let result = try await Utils.minLovelacePreAlonzo(Value(coin: 2_000_000), context)
     #expect(result == protocolParameters.utxoCostPerByte)
 }
 
@@ -28,7 +28,7 @@ struct TestMinLoveLaceMultiAsset {
                 [Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: 1_000_000]],
             ]
         )
-        let result = try await minLovelacePreAlonzo(amount, context)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context)
         #expect(result == 1_310_316)
     }
 
@@ -47,7 +47,7 @@ struct TestMinLoveLaceMultiAsset {
             ]
         )
 
-        let result = try await minLovelacePreAlonzo(amount, context)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context)
         #expect(result == 1_344_798)
     }
 
@@ -69,7 +69,7 @@ struct TestMinLoveLaceMultiAsset {
             ]
         )
 
-        let result = try await minLovelacePreAlonzo(amount, context)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context)
         #expect(result == 1_448_244)
     }
 
@@ -87,7 +87,7 @@ struct TestMinLoveLaceMultiAsset {
             ]
         )
 
-        let result = try await minLovelacePreAlonzo(amount, context)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context)
         #expect(result == 1_482_726)
     }
 
@@ -109,7 +109,7 @@ struct TestMinLoveLaceMultiAsset {
             ]
         )
 
-        let result = try await minLovelacePreAlonzo(amount, context)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context)
         #expect(result == 1_517_208)
     }
 
@@ -147,7 +147,7 @@ struct TestMinLoveLaceMultiAsset {
             ]
         )
 
-        let result = try await minLovelacePreAlonzo(amount, context)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context)
         #expect(result == 6_896_400)
     }
 
@@ -162,7 +162,7 @@ struct TestMinLoveLaceMultiAsset {
             ]
         )
 
-        let result = try await minLovelacePreAlonzo(amount, context, hasDatum: true)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context, hasDatum: true)
         #expect(result == 1_655_136)
     }
 
@@ -183,7 +183,7 @@ struct TestMinLoveLaceMultiAsset {
             ]
         )
 
-        let result = try await minLovelacePreAlonzo(amount, context, hasDatum: true)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context, hasDatum: true)
         #expect(result == 2_172_366)
     }
 
@@ -201,7 +201,7 @@ struct TestMinLoveLaceMultiAsset {
             ]
         )
 
-        let result = try await minLovelacePreAlonzo(amount, context, hasDatum: true)
+        let result = try await Utils.minLovelacePreAlonzo(amount, context, hasDatum: true)
         #expect(result == 1_827_546)
     }
 }
@@ -271,7 +271,7 @@ struct TieredReferenceScriptFeeTests {
     func testTieredReferenceScriptFee() async throws {
         let context = MockChainContext()
 
-        let result = try await tieredReferenceScriptFee(context, scriptsSize: 80 * 1024)
+        let result = try await Utils.tieredReferenceScriptFee(context, scriptsSize: 80 * 1024)
         #expect(result == 4_489_380)
     }
 
@@ -283,7 +283,7 @@ struct TieredReferenceScriptFeeTests {
             throws: CardanoTxBuilderError.valueError(
                 "Reference scripts size: 204801 exceeds maximum allowed size (204800).")
         ) {
-            _ = try await tieredReferenceScriptFee(context, scriptsSize: 204801)
+            _ = try await Utils.tieredReferenceScriptFee(context, scriptsSize: 204801)
         }
     }
 
@@ -357,7 +357,7 @@ struct TieredReferenceScriptFeeTests {
                 utxoCostPerByte: 0
             ))
 
-        let result = try await tieredReferenceScriptFee(context, scriptsSize: 100)
+        let result = try await Utils.tieredReferenceScriptFee(context, scriptsSize: 100)
         #expect(result == 0)
     }
 }

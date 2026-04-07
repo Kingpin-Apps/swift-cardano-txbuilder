@@ -1927,7 +1927,7 @@ struct TxBuilderTests {
             )
         ])
         originalUtxos[0].output.amount.coin = try await Int(
-            minLovelacePostAlonzo(
+            Utils.minLovelacePostAlonzo(
                 originalUtxos[0].output,
                 chainContext
             )
@@ -1957,7 +1957,7 @@ struct TxBuilderTests {
         let txBody = try await txBuilder.build(changeAddress: receiver)
         
         let expectedMinCollateralReturnAmount: Int = try await Int(
-            minLovelacePostAlonzo(
+            Utils.minLovelacePostAlonzo(
                 originalUtxos[0].output,
                 chainContext
             )
@@ -2538,7 +2538,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try tx.transactionBody.toPrimitive()
         
-        let expectedFee = try await calculateFee(
+        let expectedFee = try await Utils.calculateFee(
             chainContext,
             length: UInt64(try tx.toCBORData().count)
         )

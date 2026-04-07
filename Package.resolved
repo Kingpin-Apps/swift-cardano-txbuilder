@@ -1,5 +1,5 @@
 {
-  "originHash" : "e3d237365403d49c59f02477268eb1bfa4d39c6f22cdfdaa09a31c48f550ddbd",
+  "originHash" : "b15985420f8b9c5f6c09c4fe0e692e9cdff167527698bcfba09a01998bf3dbd9",
   "pins" : [
     {
       "identity" : "base32",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tuist/Command.git",
       "state" : {
-        "revision" : "079a7803b581d3022469b3a331bccd51d48d2fc0",
-        "version" : "0.13.0"
+        "revision" : "2b9c835b8e373faf0e9a196508a34e20db73769a",
+        "version" : "0.14.0"
       }
     },
     {
@@ -60,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mattpolzin/OpenAPIKit",
       "state" : {
-        "revision" : "e0ecdf050c4bebc0104ed2505ec6fa1f6afb7555",
-        "version" : "3.7.0"
+        "revision" : "343b2c1793058fcc53c1bd7e2907f8e3a4d640fb",
+        "version" : "3.9.0"
       }
     },
     {
@@ -150,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-chain.git",
       "state" : {
-        "revision" : "ef21aa4da799d1216f7c2cc3b062f34f740313c1",
-        "version" : "0.2.0"
+        "revision" : "d1417af596b894e035ed104b2cb2da30bf521ca8",
+        "version" : "0.2.15"
       }
     },
     {
@@ -159,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-core.git",
       "state" : {
-        "revision" : "8b910f4bf1bd10479a505c90fd0cb9c30b1bb922",
-        "version" : "0.2.25"
+        "revision" : "cc1bf9fb3f05da4a02f55bd7036bb88aad0454d3",
+        "version" : "0.3.3"
       }
     },
     {
@@ -168,8 +168,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-utils.git",
       "state" : {
-        "revision" : "dc13a1694061722d30e9ca0115e419d5802f5784",
-        "version" : "0.1.22"
+        "revision" : "30e78c0c4f43456f43d73a4a5fc3240ae70ee773",
+        "version" : "0.3.4"
       }
     },
     {
@@ -227,12 +227,21 @@
       }
     },
     {
+      "identity" : "swift-kes",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Kingpin-Apps/swift-kes.git",
+      "state" : {
+        "revision" : "82990128a42f062bb1690802b48d74720fbd8249",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "swift-koios",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-koios.git",
       "state" : {
-        "revision" : "f736bc504db09c1f3d558aa5747b997e37cdaf70",
-        "version" : "0.1.5"
+        "revision" : "e0af84f37fe689368696048aa4e7c00c4fe106fb",
+        "version" : "0.1.7"
       }
     },
     {
@@ -258,8 +267,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-ncal.git",
       "state" : {
-        "revision" : "e42fbe3c3d45a159ac626c956c83466373927722",
-        "version" : "0.2.1"
+        "revision" : "092ff55a1e32ea7bd6faeb6a3884dd90109558ae",
+        "version" : "0.2.2"
       }
     },
     {
@@ -285,8 +294,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-openapi-generator",
       "state" : {
-        "revision" : "d74223cc5595a8165181c4d9579243c932e5cd07",
-        "version" : "1.10.3"
+        "revision" : "73997cc62c2193d5046e431c9d546119dda14502",
+        "version" : "1.11.1"
       }
     },
     {
@@ -294,8 +303,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-openapi-runtime",
       "state" : {
-        "revision" : "7722cf8eac05c1f1b5b05895b04cfcc29576d9be",
-        "version" : "1.8.3"
+        "revision" : "f039fa6d6338aab5164f3d1be16281524c9a8f89",
+        "version" : "1.11.0"
       }
     },
     {
@@ -341,6 +350,15 @@
       "state" : {
         "revision" : "075344faec47dadba98bef6a319e310c98be0820",
         "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "version",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mxcl/Version.git",
+      "state" : {
+        "revision" : "67ce582bb9de70e1eb2ee41fd71aad3b5f86d97b",
+        "version" : "2.2.0"
       }
     },
     {

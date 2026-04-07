@@ -18,9 +18,9 @@ let package = Package(
             targets: ["SwiftCardanoTxBuilder"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", from: "0.2.25"),
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.2.0"),
-        .package(url: "https://github.com/Kingpin-Apps/swift-ncal.git", from: "0.2.1"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", from: "0.3.3"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.2.15"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-ncal.git", from: "0.2.2"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.

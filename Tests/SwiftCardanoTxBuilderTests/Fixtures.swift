@@ -11,6 +11,8 @@ import SwiftCardanoCore
 // MARK: - Mock Classes
 
 class MockChainContext: ChainContext {
+    let type: SwiftCardanoChain.ContextType = .online
+
     var name: String = "MockChainContext"
 
     public var _protocolParameters: ProtocolParameters?

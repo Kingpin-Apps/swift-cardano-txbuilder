@@ -927,7 +927,7 @@ public class TxBuilder: Loggable {
                 // If change address is provided and remainder is smaller than minimum ADA required in change,
                 // we need to select additional UTxOs available from the address
                 if unfulfilledAmount.coin < 0 {
-                    let minLovelace = try await minLovelacePostAlonzo(
+                    let minLovelace = try await Utils.minLovelacePostAlonzo(
                         TransactionOutput(
                             address: changeAddress,
                             amount: selectedAmount - trimmedSelectedAmount
@@ -1267,7 +1267,7 @@ public class TxBuilder: Loggable {
         // When there is only ADA left, simply use remaining coin value as change
         if change.multiAsset.isEmpty {
             if respectMinUtxo {
-                let minLovelace = try await minLovelacePostAlonzo(
+                let minLovelace = try await Utils.minLovelacePostAlonzo(
                     TransactionOutput(address: address, amount: change),
                     context
                 )
@@ -1297,7 +1297,7 @@ public class TxBuilder: Loggable {
                 // There may be rare cases where adding ADA causes size exceeds limit
                 // We will revisit if it becomes an issue
                 if respectMinUtxo {
-                    let minLovelace = try await minLovelacePostAlonzo(
+                    let minLovelace = try await Utils.minLovelacePostAlonzo(
                         TransactionOutput(
                             address: address,
                             amount: Value(
@@ -1326,7 +1326,7 @@ public class TxBuilder: Loggable {
                         multiAsset: multiAsset
                     )
                     changeValue.coin = Int(
-                        try await minLovelacePostAlonzo(
+                        try await Utils.minLovelacePostAlonzo(
                             TransactionOutput(
                                 address: address,
                                 amount: changeValue
@@ -1413,7 +1413,7 @@ public class TxBuilder: Loggable {
         var attemptAmount = newAmount + currentAmount
 
         // Calculate minimum ada requirements for more precise value size
-        let requiredLovelace = try await minLovelacePostAlonzo(
+        let requiredLovelace = try await Utils.minLovelacePostAlonzo(
             TransactionOutput(address: output.address, amount: attemptAmount),
             context
         )
@@ -1477,7 +1477,7 @@ public class TxBuilder: Loggable {
 
                 // Calculate min lovelace required for more precise size
                 var updatedAmount = output.amount
-                let requiredLovelace = try await minLovelacePostAlonzo(
+                let requiredLovelace = try await Utils.minLovelacePostAlonzo(
                     TransactionOutput(address: address, amount: updatedAmount),
                     context
                 )
@@ -1531,7 +1531,7 @@ public class TxBuilder: Loggable {
             }
         }
 
-        var estimatedFee = try await calculateFee(
+        var estimatedFee = try await Utils.calculateFee(
             context,
             length: UInt64(buildFullFakeTx().toCBORData().count),
             execSteps: UInt64(plutusExecutionUnits.steps),
@@ -1606,7 +1606,7 @@ public class TxBuilder: Loggable {
         if txBody.fee == 0 {
             // When fee is not specified, we will use max possible fee to fill in the fee field.
             // This will make sure the size of fee field itself is taken into account during fee estimation.
-            txBody.fee = try await maxTxFee(context)
+            txBody.fee = try await Utils.maxTxFee(context)
         }
 
         let witness = try buildFakeWitnessSet()
@@ -1946,7 +1946,7 @@ public class TxBuilder: Loggable {
 
         let collateralAmount =
             Int(
-                try await maxTxFee(
+                try await Utils.maxTxFee(
                     context,
                     refScriptSize: UInt64(refScriptSize())
                 )) * protocolParameters.collateralPercentage / 100
@@ -1963,7 +1963,7 @@ public class TxBuilder: Loggable {
                 var a = curTotal.coin < collateralAmount
                 var b = try shouldAddCollateralReturn(curCollateralReturn)
                 var c = 0 <= curCollateralReturn.coin
-                var d = try await minLovelacePostAlonzo(
+                var d = try await Utils.minLovelacePostAlonzo(
                     TransactionOutput(
                         address: collateralReturnAddress, amount: curCollateralReturn),
                     context
@@ -1985,7 +1985,7 @@ public class TxBuilder: Loggable {
                     a = curTotal.coin < collateralAmount
                     b = try shouldAddCollateralReturn(curCollateralReturn)
                     c = 0 <= curCollateralReturn.coin
-                    d = try await minLovelacePostAlonzo(
+                    d = try await Utils.minLovelacePostAlonzo(
                         TransactionOutput(
                             address: collateralReturnAddress, amount: curCollateralReturn),
                         context
@@ -2041,7 +2041,7 @@ public class TxBuilder: Loggable {
             return  // No need to return collateral if the remaining amount is too small
         }
 
-        let minLovelaceVal = try await minLovelacePostAlonzo(
+        let minLovelaceVal = try await Utils.minLovelacePostAlonzo(
             TransactionOutput(
                 address: collateralReturnAddress,
                 amount: returnAmount
