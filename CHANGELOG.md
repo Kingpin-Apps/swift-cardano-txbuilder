@@ -1,3 +1,9 @@
+## 0.2.6 (2026-04-07)
+
+### Fix
+
+- improve scriptDataHash handling
+
 ## 0.2.5 (2026-04-07)
 
 ### Fix
