@@ -1851,7 +1851,11 @@ public class TxBuilder: Loggable {
             }
             return try Utils.scriptDataHash(
                 redeemers: try redeemers(),
-                datums: Array(datums.values),
+                datums: datums.isEmpty ? nil : .nonEmptyOrderedSet(
+                    NonEmptyOrderedSet(
+                        datums.values.map { $0 }
+                    )
+                ),
                 costModels: CostModels(costModels)
             )
         }

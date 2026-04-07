@@ -224,7 +224,7 @@ struct TestScriptDataHash {
         
         let result = try Utils.scriptDataHash(
             redeemers: redeemers,
-            datums: [.plutusData(unit.toPlutusData())]
+            datums: .list([.plutusData(unit.toPlutusData())])
         )
         let scriptHash = try ScriptDataHash(
             from:
@@ -241,7 +241,8 @@ struct TestScriptDataHash {
         let unit = SwiftCardanoCore.Unit()
         
         let result = try Utils.scriptDataHash(
-            datums: [.plutusData(unit.toPlutusData())],
+            redeemers: .list([]),
+            datums: .list([.plutusData(unit.toPlutusData())]),
         )
         let scriptHash = try ScriptDataHash(
             from: .string("2f50ea2546f8ce020ca45bfcf2abeb02ff18af2283466f888ae489184b3d2d39")

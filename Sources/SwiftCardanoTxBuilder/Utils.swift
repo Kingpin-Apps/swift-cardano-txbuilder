@@ -16,12 +16,10 @@ public struct Utils {
     ///   - costModels: Cost models.
     /// - Returns: Plutus script data hash
     public static func scriptDataHash(
-        redeemers: Redeemers? = .list([]),
-        datums: [Datum] = [],
+        redeemers: Redeemers? = .map(RedeemerMap()),
+        datums: ListOrNonEmptyOrderedSet<Datum>? = nil,
         costModels: CostModels? = nil
     ) throws -> ScriptDataHash {
-        let costModelsBytes: Data
-        let datumBytes: Data
         
         let redeemersIsEmpty: Bool
         switch redeemers {
@@ -33,6 +31,7 @@ public struct Utils {
                 redeemersIsEmpty = true
         }
         
+        let costModelsBytes: Data
         if redeemersIsEmpty {
             costModelsBytes = try CBOREncoder().encode(CBOR.map([:]))
         } else if let costModels = costModels {
@@ -42,12 +41,7 @@ public struct Utils {
             costModelsBytes = try costModels.toCBORData()
         }
         
-        if datums.isEmpty {
-            datumBytes = Data()
-        } else {
-            datumBytes = try CBOREncoder().encode(datums)
-        }
-        
+        let datumBytes = try datums?.toCBORData() ?? Data()
         let redeemerBytes = try redeemers?.toCBORData() ?? Data()
         
         return ScriptDataHash(
