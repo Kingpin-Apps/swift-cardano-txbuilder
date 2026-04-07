@@ -1,3 +1,9 @@
+## 0.2.5 (2026-04-07)
+
+### Fix
+
+- make Utils public and refactor funtions as part of Utils struct
+
 ## 0.2.4 (2026-02-13)
 
 ### Fix

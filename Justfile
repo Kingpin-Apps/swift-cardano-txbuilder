@@ -1,0 +1,27 @@
+run:
+    swift run
+
+build:
+    swift build
+    
+clean:
+    swift package clean
+
+test:
+    swift test
+
+release:
+    swift build -c release
+
+# Update changelog
+changelog:
+	cz ch
+    
+# Bump version according to changelog
+bump: changelog
+	cz bump
+
+# Generate DocC documentation
+docs:
+    swift package generate-documentation --target SwiftCardanoTxBuilder
+
