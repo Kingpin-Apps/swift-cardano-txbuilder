@@ -1,5 +1,5 @@
 {
-  "originHash" : "f783d248835f4db33e8fc92c9b36564e03cd9536036db3e1f126497f11a5ec36",
+  "originHash" : "684af2ecaf5ec7cef5a4e05bce4b128ebf03383af121f58e19b745a12e594fe1",
   "pins" : [
     {
       "identity" : "base32",
@@ -128,6 +128,15 @@
       }
     },
     {
+      "identity" : "swift-atomics",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-atomics.git",
+      "state" : {
+        "revision" : "b601256eab081c0f92f059e12818ac1d4f178ff7",
+        "version" : "1.3.0"
+      }
+    },
+    {
       "identity" : "swift-base58",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/KINGH242/swift-base58.git",
@@ -146,12 +155,21 @@
       }
     },
     {
+      "identity" : "swift-blst",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Kingpin-Apps/swift-blst.git",
+      "state" : {
+        "revision" : "40438a41e6ee4db24627e89730bc46aacb0d1afc",
+        "version" : "0.1.2"
+      }
+    },
+    {
       "identity" : "swift-cardano-chain",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-chain.git",
       "state" : {
-        "revision" : "d1417af596b894e035ed104b2cb2da30bf521ca8",
-        "version" : "0.2.15"
+        "revision" : "a6378cf199e85a7320376cfd3efd842b192d9e44",
+        "version" : "0.3.2"
       }
     },
     {
@@ -159,8 +177,26 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-core.git",
       "state" : {
-        "revision" : "fb58ccd5a63721a3735a06444088dfb2dbbc41de",
-        "version" : "0.3.6"
+        "revision" : "95aa7b5363014ec99e482982fdad601b6b7d3dc8",
+        "version" : "0.3.16"
+      }
+    },
+    {
+      "identity" : "swift-cardano-network",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Kingpin-Apps/swift-cardano-network.git",
+      "state" : {
+        "revision" : "309b819daf5260695231fa05a35d6aa6c1b1c41b",
+        "version" : "1.0.7"
+      }
+    },
+    {
+      "identity" : "swift-cardano-uplc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Kingpin-Apps/swift-cardano-uplc.git",
+      "state" : {
+        "revision" : "707df7b756bd4dc3fdfd265794ed1a990c67b58b",
+        "version" : "0.1.4"
       }
     },
     {
@@ -170,6 +206,15 @@
       "state" : {
         "revision" : "30e78c0c4f43456f43d73a4a5fc3240ae70ee773",
         "version" : "0.3.4"
+      }
+    },
+    {
+      "identity" : "swift-certificates",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-certificates.git",
+      "state" : {
+        "revision" : "bde8ca32a096825dfce37467137c903418c1893d",
+        "version" : "1.19.1"
       }
     },
     {
@@ -218,6 +263,15 @@
       }
     },
     {
+      "identity" : "swift-http-structured-headers",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-http-structured-headers.git",
+      "state" : {
+        "revision" : "933538faa42c432d385f02e07df0ace7c5ecfc47",
+        "version" : "1.7.0"
+      }
+    },
+    {
       "identity" : "swift-http-types",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-http-types",
@@ -249,8 +303,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "ce592ae52f982c847a4efc0dd881cc9eb32d29f2",
-        "version" : "1.6.4"
+        "revision" : "5073617dac96330a486245e4c0179cb0a6fd2256",
+        "version" : "1.12.0"
+      }
+    },
+    {
+      "identity" : "swift-metrics",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-metrics.git",
+      "state" : {
+        "revision" : "d51c8d13fa366eec807eedb4e37daa60ff5bfdd5",
+        "version" : "2.10.1"
       }
     },
     {
@@ -258,8 +321,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-mnemonic.git",
       "state" : {
-        "revision" : "b05972fe91e2fd63a507b73862842724007a35bc",
-        "version" : "0.2.1"
+        "revision" : "af037bfb8964c380e387cac5c413074e6929123c",
+        "version" : "0.2.2"
       }
     },
     {
@@ -269,6 +332,42 @@
       "state" : {
         "revision" : "092ff55a1e32ea7bd6faeb6a3884dd90109558ae",
         "version" : "0.2.2"
+      }
+    },
+    {
+      "identity" : "swift-nio",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-nio.git",
+      "state" : {
+        "revision" : "f71c8d2a5e74a2c6d11a0fbe324774b5d6084237",
+        "version" : "2.99.0"
+      }
+    },
+    {
+      "identity" : "swift-nio-extras",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-nio-extras.git",
+      "state" : {
+        "revision" : "5a48717e29f62cb8326d6d42e46b562ca93847a6",
+        "version" : "1.34.0"
+      }
+    },
+    {
+      "identity" : "swift-nio-http2",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-nio-http2.git",
+      "state" : {
+        "revision" : "81cc18264f92cd307ff98430f89372711d4f6fe9",
+        "version" : "1.43.0"
+      }
+    },
+    {
+      "identity" : "swift-nio-ssl",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-nio-ssl.git",
+      "state" : {
+        "revision" : "3f337058ccd7243c4cac7911477d8ad4c598d4da",
+        "version" : "2.37.0"
       }
     },
     {
@@ -314,6 +413,15 @@
       "state" : {
         "revision" : "279aa6b77be6aa842a4bf3c45fa79fa15edf3e07",
         "version" : "1.2.0"
+      }
+    },
+    {
+      "identity" : "swift-secp256k1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/21-DOT-DEV/swift-secp256k1",
+      "state" : {
+        "revision" : "4735a0ed8fd9d9f7e0a8b75aa760cf81a157452f",
+        "version" : "0.22.0"
       }
     },
     {
