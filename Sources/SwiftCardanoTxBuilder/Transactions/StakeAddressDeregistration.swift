@@ -9,7 +9,7 @@ public extension TxBuilder.Transactions {
     ///   - signingKeys: Optional signing keys to sign the transaction. If nil or empty, returns an unsigned transaction.
     /// - Returns: A transaction that registers the stake address.
     /// - Throws: CardanoTxBuilderError if the transaction could not be created.
-    func stakeAddressderegistration(
+    func stakeAddressDeregistration(
         stakeVerificationKey: StakeVerificationKey,
         feePaymentAddress: Address,
         signingKeys: [SigningKeyType]? = nil

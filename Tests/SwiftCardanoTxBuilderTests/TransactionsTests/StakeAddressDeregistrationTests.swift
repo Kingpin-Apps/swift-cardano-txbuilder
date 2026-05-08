@@ -43,7 +43,7 @@ struct StakeAddressDeregistrationTests {
         let txBuilder = TxBuilder(context: chainContext)
         
         // Act: Create stake address deregistration transaction
-        let tx = try await txBuilder.transactions.stakeAddressderegistration(
+        let tx = try await txBuilder.transactions.stakeAddressDeregistration(
             stakeVerificationKey: stakeVK,
             feePaymentAddress: feePaymentAddress
         )
