@@ -1,5 +1,5 @@
 {
-  "originHash" : "684af2ecaf5ec7cef5a4e05bce4b128ebf03383af121f58e19b745a12e594fe1",
+  "originHash" : "0272fed6df3ebf78ba20e656e5df15bd54e2fd23ea8dfc2e8799e8d6d4eccef2",
   "pins" : [
     {
       "identity" : "base32",
@@ -150,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-blockfrost-api.git",
       "state" : {
-        "revision" : "d7870e7996339cca226ffe462f59a6d8aded841a",
-        "version" : "0.1.5"
+        "revision" : "1e4db8c4e4af8c59085e06f18c4185c47fac1a19",
+        "version" : "0.2.0"
       }
     },
     {
@@ -168,8 +168,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-chain.git",
       "state" : {
-        "revision" : "a6378cf199e85a7320376cfd3efd842b192d9e44",
-        "version" : "0.3.2"
+        "revision" : "f7f3794b6bec9570887d1fa9f7360a5788a2c740",
+        "version" : "0.4.0"
       }
     },
     {
@@ -177,8 +177,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-core.git",
       "state" : {
-        "revision" : "95aa7b5363014ec99e482982fdad601b6b7d3dc8",
-        "version" : "0.3.16"
+        "revision" : "d7ff231ecd0c3b336164dd7c5b73889d966d1876",
+        "version" : "0.3.18"
       }
     },
     {
@@ -294,8 +294,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-koios.git",
       "state" : {
-        "revision" : "e0af84f37fe689368696048aa4e7c00c4fe106fb",
-        "version" : "0.1.7"
+        "revision" : "c7309810284625fa6ae53f7cf516869d96ad576a",
+        "version" : "0.2.0"
       }
     },
     {
@@ -384,8 +384,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-ogmios.git",
       "state" : {
-        "revision" : "52525b431f4ccba5a708d3856d78987509e95177",
-        "version" : "0.1.3"
+        "revision" : "2b19c81e2fc43d81f705c7ea366a0730ff44ff7d",
+        "version" : "0.2.0"
       }
     },
     {

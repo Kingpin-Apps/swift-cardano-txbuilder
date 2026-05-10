@@ -10,7 +10,7 @@ import SwiftCardanoCore
 
 // MARK: - Mock Classes
 
-class MockChainContext: ChainContext {
+final class MockChainContext: ChainContext, @unchecked Sendable {
     let type: SwiftCardanoChain.ContextType = .online
 
     var name: String = "MockChainContext"
@@ -18,72 +18,60 @@ class MockChainContext: ChainContext {
     public var _protocolParameters: ProtocolParameters?
 
     public var _utxos: [UTxO]?
-    
+
     public var _stakeAddressInfo: [StakeAddressInfo]?
-    
-    var protocolParameters: () async throws -> SwiftCardanoCore.ProtocolParameters {
-        
+
+    var networkId: SwiftCardanoCore.NetworkId {
+        .testnet
+    }
+
+    func protocolParameters() async throws -> SwiftCardanoCore.ProtocolParameters {
         if self._protocolParameters == nil {
             let protocolParametersJSON = try! getFilePath(
                 forResource: protocolParametersJSONFilePath.forResource,
                 ofType: protocolParametersJSONFilePath.ofType,
                 inDirectory: protocolParametersJSONFilePath.inDirectory
             )
-            
+
             self._protocolParameters = try! ProtocolParameters.load(from: protocolParametersJSON!)
         }
-        
-        return {
-            self._protocolParameters!
-        }
+
+        return self._protocolParameters!
     }
 
-    var genesisParameters: () async throws -> SwiftCardanoCore.GenesisParameters {
-        return {
-            GenesisParameters(
-                activeSlotsCoefficient: Double(1000),
-                epochLength: 21600,
-                maxKesEvolutions: 90,
-                maxLovelaceSupply: 45_000_000_000,
-                networkId: "testnet",
-                networkMagic: 42,
-                securityParam: 2160,
-                slotLength: 1,
-                slotsPerKesPeriod: 1_200,
-                systemStart: ISO8601DateFormatter().date(from: "2017-09-23T21:44:51Z")!,
-                updateQuorum: 5
-            )
-        }
+    func genesisParameters() async throws -> SwiftCardanoCore.GenesisParameters {
+        return GenesisParameters(
+            activeSlotsCoefficient: Double(1000),
+            epochLength: 21600,
+            maxKesEvolutions: 90,
+            maxLovelaceSupply: 45_000_000_000,
+            networkId: "testnet",
+            networkMagic: 42,
+            securityParam: 2160,
+            slotLength: 1,
+            slotsPerKesPeriod: 1_200,
+            systemStart: ISO8601DateFormatter().date(from: "2017-09-23T21:44:51Z")!,
+            updateQuorum: 5
+        )
     }
 
-    var networkId: SwiftCardanoCore.NetworkId {
-        .testnet
+    func epoch() async throws -> Int {
+        return 300
     }
 
-    var epoch: () async throws -> Int {
-        return {
-            300
-        }
+    func era() async throws -> Era? {
+        return .conway
     }
 
-    var era: () async throws -> Era? {
-        return {
-            .conway
-        }
+    func lastBlockSlot() async throws -> Int {
+        return 2000
     }
-
-    var lastBlockSlot: () async throws -> Int {
-        return {
-            2000
-        }
-    }
-
 
     func utxos(address: SwiftCardanoCore.Address) async throws -> [SwiftCardanoCore.UTxO] {
         if _utxos != nil {
             return _utxos!.filter { $0.output.address == address }
         }
-        
+
         let txIn1 = TransactionInput(
             transactionId: TransactionId(payload: Data(repeating: 0x31, count: 32)), // ASCII "1" = 0x31
             index: 0
@@ -92,12 +80,12 @@ class MockChainContext: ChainContext {
             transactionId: TransactionId(payload: Data(repeating: 0x32, count: 32)), // ASCII "2" = 0x32
             index: 1
         )
-        
+
         let txOut1 = TransactionOutput(
             address: address,
             amount: Value(coin: 5_000_000)
         )
-        
+
         let policyId = PolicyID(payload: Data(repeating: 0x31, count: 28))
         let multiAsset = MultiAsset([
             policyId: Asset([
@@ -109,7 +97,7 @@ class MockChainContext: ChainContext {
             address: address,
             amount: Value(coin: 6_000_000, multiAsset: multiAsset)
         )
-        
+
         return [
             UTxO(input: txIn1, output: txOut1),
             UTxO(input: txIn2, output: txOut2)
@@ -134,17 +122,17 @@ class MockChainContext: ChainContext {
         return []
     }
 
-    func stakePools() async throws -> [String] {
+    func stakePools() async throws -> [PoolOperator] {
         return [
-            "pool1qqa8tkycj4zck4sy7n8mqr22x5g7tvm8hnp9st95wmuvvtw28th",
-            "pool1qzq896ke4meh0tn9fl0dcnvtn2rzdz75lk3h8nmsuew8z5uln7r",
-            "pool1qzhrd5sd0v0r6q2kqmaz07tvgry72whcjw0xsmnttgyuxtzpkkx",
-            "pool1qrjk9dqdaydy207lw4hf3zlxxg2qlxvxp9kvxx9fscccgwmgfv9",
+            try PoolOperator(from: "pool1qqa8tkycj4zck4sy7n8mqr22x5g7tvm8hnp9st95wmuvvtw28th"),
+            try PoolOperator(from: "pool1qzq896ke4meh0tn9fl0dcnvtn2rzdz75lk3h8nmsuew8z5uln7r"),
+            try PoolOperator(from: "pool1qzhrd5sd0v0r6q2kqmaz07tvgry72whcjw0xsmnttgyuxtzpkkx"),
+            try PoolOperator(from: "pool1qrjk9dqdaydy207lw4hf3zlxxg2qlxvxp9kvxx9fscccgwmgfv9"),
         ]
     }
 
     init() {}
-    
+
     init(protocolParameters: ProtocolParameters?) {
         self._protocolParameters = protocolParameters
     }

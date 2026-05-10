@@ -750,7 +750,7 @@ public class TxBuilder: Loggable {
         }
 
         // Initialize the inner map if this is the first vote for this voter
-        if votingProcedures!.voters.contains(where: { $0 == voter }) {
+        if !votingProcedures!.voters.contains(where: { $0 == voter }) {
             votingProcedures![voter] = [:]
         }
 
