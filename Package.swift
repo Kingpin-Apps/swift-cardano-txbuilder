@@ -12,26 +12,23 @@ let package = Package(
       .tvOS(.v14),
     ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "SwiftCardanoTxBuilder",
             targets: ["SwiftCardanoTxBuilder"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", from: "0.3.21"),
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.4.2"),
-        .package(url: "https://github.com/Kingpin-Apps/swift-ncal.git", from: "0.2.3"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", from: "0.4.3"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.5.0"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-nacl.git", .upToNextMinor(from: "1.0.1")),
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "SwiftCardanoTxBuilder",
             dependencies: [
                 .product(name: "SwiftCardanoCore", package: "swift-cardano-core"),
                 .product(name: "SwiftCardanoChain", package: "swift-cardano-chain"),
-                .product(name: "SwiftNcal", package: "swift-ncal"),
-                .product(name: "Clibsodium", package: "swift-ncal"),
+                .product(name: "SwiftNaCl", package: "swift-nacl"),
+                .product(name: "Clibsodium", package: "swift-nacl"),
             ]
         ),
         .testTarget(
