@@ -1,8 +1,8 @@
 import Foundation
 import SwiftCardanoChain
 import SwiftCardanoCore
-import SwiftNcal
-import PotentCBOR
+import SwiftNaCl
+import CBORCodable
 
 // MARK: - Utility Functions
 
@@ -45,7 +45,7 @@ public struct Utils {
         let redeemerBytes = try redeemers?.toCBORData() ?? Data()
         
         return ScriptDataHash(
-            payload: try SwiftNcal.Hash().blake2b(
+            payload: try SwiftNaCl.Hash().blake2b(
                 data: redeemerBytes + datumBytes + costModelsBytes,
                 digestSize: SCRIPT_DATA_HASH_SIZE,
                 encoder: RawEncoder.self
