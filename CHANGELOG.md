@@ -1,3 +1,10 @@
+## 1.0.0 (2026-05-29)
+
+### Feat
+
+- widen money/slot/epoch types for core 0.4.x
+- rename SwiftNcal import to SwiftNaCl
+
 ## 0.2.10 (2026-05-15)
 
 ### Fix
