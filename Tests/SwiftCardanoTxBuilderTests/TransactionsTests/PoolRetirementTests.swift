@@ -17,7 +17,7 @@ struct PoolRetirementTests {
         let feePaymentAddress = try Address(from: .string("addr_test1vrm9x2zsux7va6w892g38tvchnzahvcd9tykqf3ygnmwtaqyfg52x"))
         
         let pool = poolOperator
-        let retirementEpoch = 400
+        let retirementEpoch: EpochNumber = 400
         let txBuilder = TxBuilder(context: chainContext)
         
         // Act: Create pool retirement transaction

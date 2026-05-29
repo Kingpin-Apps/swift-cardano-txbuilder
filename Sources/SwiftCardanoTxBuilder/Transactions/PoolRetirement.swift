@@ -12,7 +12,7 @@ public extension TxBuilder.Transactions {
     /// - Throws: CardanoTxBuilderError if the transaction could not be built or signed.
     func poolRetirement(
         poolOperator: PoolOperator,
-        epoch: Int,
+        epoch: EpochNumber,
         feePaymentAddress: Address,
         signingKeys: [SigningKeyType]? = nil
     ) async throws -> Transaction {

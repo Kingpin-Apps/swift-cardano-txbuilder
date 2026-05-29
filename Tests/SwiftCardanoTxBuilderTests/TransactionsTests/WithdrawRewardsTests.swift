@@ -23,7 +23,7 @@ struct WithdrawRewardsTests {
         )
         
         // Mock rewards of 5,000,000 lovelace for this stake address
-        let rewardBalance = 5_000_000
+        let rewardBalance: Int64 = 5_000_000
         chainContext._stakeAddressInfo = [
             StakeAddressInfo(
                 address: try stakeAddress.toBech32(),

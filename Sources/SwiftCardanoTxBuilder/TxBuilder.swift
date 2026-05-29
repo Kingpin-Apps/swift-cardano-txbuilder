@@ -44,10 +44,10 @@ public class TxBuilder: Loggable {
     public var feeBuffer: Int?
 
     /// Time-to-live for the transaction
-    public var ttl: Int?
+    public var ttl: SlotNumber?
 
     /// Validity start time for the transaction
-    public var validityStart: Int?
+    public var validityStart: SlotNumber?
 
     /// Auxiliary data for the transaction
     public var auxiliaryData: AuxiliaryData?
@@ -115,10 +115,10 @@ public class TxBuilder: Loggable {
     private var _excludedInputs: [UTxO] = []
     private var _inputAddresses: [AddressOrString] = []
     private var _outputs: [TransactionOutput] = []
-    private var _fee: Int = 0
+    private var _fee: Int64 = 0
     private var _datums: [DatumHash: Datum] = [:]
     private var _collateralReturn: TransactionOutput?
-    private var _totalCollateral: Int?
+    private var _totalCollateral: Int64?
     private var _redeemers: [Redeemer] = []
     private var _inputsToRedeemers: [UTxO: Redeemer] = [:]
     private var _mintingScriptToRedeemers: [(ScriptType, Redeemer?)] = []
@@ -140,8 +140,8 @@ public class TxBuilder: Loggable {
                 executionMemoryBuffer: Double = 0.2,
                 executionStepBuffer: Double = 0.2,
                 feeBuffer: Int? = nil,
-                ttl: Int? = nil,
-                validityStart: Int? = nil,
+                ttl: SlotNumber? = nil,
+                validityStart: SlotNumber? = nil,
                 auxiliaryData: AuxiliaryData? = nil,
                 nativeScripts: [NativeScript]? = nil,
                 mint: MultiAsset? = nil,
@@ -619,7 +619,7 @@ public class TxBuilder: Loggable {
     }
 
     /// The transaction fee
-    public var fee: Int {
+    public var fee: Int64 {
         get { _fee }
         set { _fee = newValue }
     }
@@ -835,14 +835,14 @@ public class TxBuilder: Loggable {
                 let lastSlot = try await context.lastBlockSlot()
                 // If None is provided, the default value is -1000
                 let offset = autoValidityStartOffset ?? -1000
-                validityStart = max(0, lastSlot + offset)
+                validityStart = SlotNumber(max(0, lastSlot + offset))
             }
 
             if (isSmart || autoTtlOffset != nil) && ttl == nil {
                 let lastSlot = try await context.lastBlockSlot()
                 // If None is provided, the default value is 10_000
                 let offset = autoTtlOffset ?? 10_000
-                ttl = max(0, lastSlot + offset)
+                ttl = SlotNumber(max(0, lastSlot + offset))
             }
 
             var selectedUtxos: [UTxO] = []
@@ -868,7 +868,7 @@ public class TxBuilder: Loggable {
 
             if let withdrawals = withdrawals {
                 for withdrawal in withdrawals.data.values {
-                    selectedAmount.coin += Int(withdrawal)
+                    selectedAmount.coin += Int64(withdrawal)
                 }
             }
 
@@ -936,7 +936,7 @@ public class TxBuilder: Loggable {
                     )
                     unfulfilledAmount.coin = max(
                         0,
-                        unfulfilledAmount.coin + Int(minLovelace)
+                        unfulfilledAmount.coin + Int64(minLovelace)
                     )
                 }
             } else {
@@ -1215,7 +1215,7 @@ public class TxBuilder: Loggable {
     }
 
     private func calcChange(
-        fees: Int,
+        fees: Int64,
         inputs: [UTxO],
         outputs: [TransactionOutput],
         address: Address,
@@ -1238,7 +1238,7 @@ public class TxBuilder: Loggable {
 
         if let withdrawals = withdrawals {
             for withdrawal in withdrawals.data.values {
-                provided.coin += Int(withdrawal)
+                provided.coin += Int64(withdrawal)
             }
         }
 
@@ -1288,7 +1288,7 @@ public class TxBuilder: Loggable {
             let multiAssetArray = try await packTokensForChange(
                 address: address,
                 change: change,
-                maxValSize: protocolParameters.maxValueSize
+                maxValSize: Int(protocolParameters.maxValueSize)
             )
 
             // Include minimum lovelace into each token output except for the last one
@@ -1325,7 +1325,7 @@ public class TxBuilder: Loggable {
                         coin: 0,
                         multiAsset: multiAsset
                     )
-                    changeValue.coin = Int(
+                    changeValue.coin = Int64(
                         try await Utils.minLovelacePostAlonzo(
                             TransactionOutput(
                                 address: address,
@@ -1348,9 +1348,9 @@ public class TxBuilder: Loggable {
         return changeOutputs
     }
 
-    private func getTotalKeyDeposit() async throws -> Int {
+    private func getTotalKeyDeposit() async throws -> Int64 {
         var stakeRegistrationCerts = Set<StakeCredential>()
-        var stakeRegistrationCertsWithExplicitDeposit = Set<Int>()
+        var stakeRegistrationCertsWithExplicitDeposit = Set<Int64>()
         var stakePoolRegistrationCerts = Set<PoolKeyHash>()
 
         let protocolParameters = try await context.protocolParameters()
@@ -1363,15 +1363,15 @@ public class TxBuilder: Loggable {
                             StakeCredential(credential: reg.stakeCredential.credential)
                         )
                     case .registerDRep(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
                     case .register(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
                     case .stakeRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
                     case .voteRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
                     case .stakeVoteRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
                     case .poolRegistration(let poolReg):
                         if initialStakePoolRegistration {
                             stakePoolRegistrationCerts.insert(poolReg.poolParams.poolOperator)
@@ -1383,17 +1383,17 @@ public class TxBuilder: Loggable {
         }
 
         let stakeRegistrationDeposit =
-            protocolParameters.stakeAddressDeposit * stakeRegistrationCerts.count
+            protocolParameters.stakeAddressDeposit * Int64(stakeRegistrationCerts.count)
             + stakeRegistrationCertsWithExplicitDeposit.reduce(0, +)
         let stakePoolRegistrationDeposit =
-            protocolParameters.stakePoolDeposit * stakePoolRegistrationCerts.count
+            protocolParameters.stakePoolDeposit * Int64(stakePoolRegistrationCerts.count)
 
         return stakeRegistrationDeposit + stakePoolRegistrationDeposit
     }
 
-    private func getTotalProposalDeposit() -> Int {
+    private func getTotalProposalDeposit() -> Int64 {
         guard let proposalProcedures = proposalProcedures else { return 0 }
-        return Int(proposalProcedures.elements.reduce(0) { $0 + $1.deposit })
+        return Int64(proposalProcedures.elements.reduce(0) { $0 + $1.deposit })
     }
 
     private func addingAssetMakeOutputOverflow(
@@ -1401,7 +1401,7 @@ public class TxBuilder: Loggable {
         currentAssets: Asset,
         policyId: ScriptHash,
         addAssetName: AssetName,
-        addAssetVal: Int,
+        addAssetVal: Int64,
         maxValSize: Int
     ) async throws -> Bool {
         var attemptAssets = currentAssets
@@ -1417,7 +1417,7 @@ public class TxBuilder: Loggable {
             TransactionOutput(address: output.address, amount: attemptAmount),
             context
         )
-        attemptAmount.coin = Int(requiredLovelace)
+        attemptAmount.coin = Int64(requiredLovelace)
 
         return try attemptAmount.toCBORData().count > maxValSize
     }
@@ -1481,7 +1481,7 @@ public class TxBuilder: Loggable {
                     TransactionOutput(address: address, amount: updatedAmount),
                     context
                 )
-                updatedAmount.coin = Int(requiredLovelace)
+                updatedAmount.coin = Int64(requiredLovelace)
 
                 if try updatedAmount.toCBORData().count > maxValSize {
                     output.amount = oldAmount
@@ -1523,7 +1523,7 @@ public class TxBuilder: Loggable {
         }
     }
 
-    private func estimateFee() async throws -> Int {
+    private func estimateFee() async throws -> Int64 {
         var plutusExecutionUnits = ExecutionUnits(mem: 0, steps: 0)
         for redeemer in _redeemerList {
             if let exUnits = redeemer.exUnits {
@@ -1543,7 +1543,7 @@ public class TxBuilder: Loggable {
             estimatedFee += UInt64(feeBuffer!)
         }
         
-        return Int(estimatedFee)
+        return Int64(estimatedFee)
     }
 
     private func buildTxBody() async throws -> TransactionBody {
@@ -1830,7 +1830,7 @@ public class TxBuilder: Loggable {
 
     private func scriptDataHash() async throws -> ScriptDataHash? {
         if !datums.isEmpty || !_redeemerList.isEmpty {
-            var costModels: [Int: [Int]] = [:]
+            var costModels: [Int: [Int64]] = [:]
             for script in allScripts {
                 var version = -1
                 switch script {
@@ -1949,7 +1949,7 @@ public class TxBuilder: Loggable {
         let protocolParameters = try await context.protocolParameters()
 
         let collateralAmount =
-            Int(
+            Int64(
                 try await Utils.maxTxFee(
                     context,
                     refScriptSize: UInt64(refScriptSize())
@@ -2096,8 +2096,8 @@ public class TxBuilder: Loggable {
                 }
 
                 redeemer.exUnits = ExecutionUnits(
-                    mem: Int(Double(exUnits.mem) * (1 + executionMemoryBuffer)),
-                    steps: Int(Double(exUnits.steps) * (1 + executionStepBuffer))
+                    mem: Int64(Double(exUnits.mem) * (1 + executionMemoryBuffer)),
+                    steps: Int64(Double(exUnits.steps) * (1 + executionStepBuffer))
                 )
                 
                 // Update the redeemer in its original storage location

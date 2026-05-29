@@ -3,7 +3,7 @@ import Foundation
 import Logging
 import SwiftCardanoChain
 import SwiftCardanoCore
-import PotentCodables
+import CBORCodable
 @testable import SwiftCardanoTxBuilder
 
 @Suite("TxBuilder Tests")
@@ -167,7 +167,7 @@ struct TxBuilderTests {
             let newUtxo = UTxO(
                 input: try TransactionInput(from: .list([
                     .bytes(Data(repeating: 1, count: 32)),
-                    .uint(UInt(UInt16(i + 100)))
+                    .uint(UInt64(UInt16(i + 100)))
                 ])),
                 output: utxo.output
             )
@@ -1778,7 +1778,7 @@ struct TxBuilderTests {
 
         #expect(txBody.collateralReturn?.address == receiver)
         #expect(
-            txBody.collateralReturn!.amount + Value(coin: Int(txBody.totalCollateral!))  == originalUtxos[0].output.amount
+            txBody.collateralReturn!.amount + Value(coin: Int64(txBody.totalCollateral!))  == originalUtxos[0].output.amount
         )
     }
     
@@ -1922,11 +1922,11 @@ struct TxBuilderTests {
             Data(repeating: 0x31, count: 28).toHex: Dictionary(
                 uniqueKeysWithValues: (0..<500).map { i in
                     let tokenName = "Token".data(using: .utf8)! + withUnsafeBytes(of: i.bigEndian) { Data($0.suffix(10)) }
-                    return (tokenName.toHex, i)
+                    return (tokenName.toHex, Int64(i))
                 }
             )
         ])
-        originalUtxos[0].output.amount.coin = try await Int(
+        originalUtxos[0].output.amount.coin = try await Int64(
             Utils.minLovelacePostAlonzo(
                 originalUtxos[0].output,
                 chainContext
@@ -2477,7 +2477,7 @@ struct TxBuilderTests {
         let txBuilder2 = TxBuilder(context: chainContext)
         let senderAddress = try Address(from: .string(sender))
         
-        let inputAmount = 10_000_000
+        let inputAmount: Int64 = 10_000_000
         
         let txIn1 = try TransactionInput(from: .list([
             .bytes(Data(repeating: 0x31, count: 32)),
@@ -2485,7 +2485,7 @@ struct TxBuilderTests {
         ]))
         let txOut1 = try TransactionOutput(from: .list([
             .string(sender),
-            .uint(UInt(inputAmount))
+            .uint(UInt64(inputAmount))
         ]))
         let utxo1 = UTxO(input: txIn1, output: txOut1)
         
@@ -2503,14 +2503,14 @@ struct TxBuilderTests {
         ]))
         let txOut2 = try TransactionOutput(from: .list([
             .string(sender),
-            .uint(UInt(inputAmount))
+            .uint(UInt64(inputAmount))
         ]))
         let utxo2 = UTxO(input: txIn2, output: txOut2)
         
         try txBuilder2
             .addInput(utxo2)
             .addOutput(
-                TransactionOutput(from: .list([.string(sender), .uint(UInt(inputAmount - Int(txBody.fee)))]))
+                TransactionOutput(from: .list([.string(sender), .uint(UInt64(inputAmount - Int64(txBody.fee)))]))
             )
         
         let tx = try await txBuilder2.buildAndSign(
@@ -2828,6 +2828,57 @@ struct TxBuilderTests {
         
         let txBody = try await txBuilder.build(changeAddress: senderAddress)
         
+        // Broken into sub-expressions to keep the Swift type-checker under its
+        // expression-complexity limit (was a single .orderedDict literal that
+        // exceeded the budget after the core 0.4.x Int64 widening).
+        let poolMargin: Primitive = .cborTag(
+            CBORTag(
+                tag: 30,
+                value: .list([
+                    .uint(UInt64(1)),
+                    .uint(UInt64(50))
+                ])
+            )
+        )
+        let poolRelays: Primitive = .list([
+            .list([
+                .uint(0),
+                .uint(3001),
+                .bytes(Data([0xC0, 0xA8, 0x00, 0x01])),
+                .bytes(Data([
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+                ])),
+            ]),
+            .list([
+                .uint(1),
+                .uint(3001),
+                .string("relay1.example.com"),
+            ]),
+            .list([
+                .uint(2),
+                .string("relay1.example.com"),
+            ]),
+        ])
+        let poolRegistrationPrimitive: Primitive = .list([
+            .list([
+                .uint(3),
+                .bytes(Data(repeating: 0x31, count: POOL_KEY_HASH_SIZE)),
+                .bytes(Data(repeating: 0x31, count: VRF_KEY_HASH_SIZE)),
+                .int(100000000),
+                .int(340000000),
+                poolMargin,
+                .bytes(Data(repeating: 0x31, count: REWARD_ACCOUNT_HASH_SIZE)),
+                .list([
+                    .bytes(Data(repeating: 0x31, count: VERIFICATION_KEY_HASH_SIZE)),
+                ]),
+                poolRelays,
+                .list([
+                    .string("https://meta1.example.com"),
+                    .bytes(Data(repeating: 0x31, count: POOL_METADATA_HASH_SIZE)),
+                ])
+            ])
+        ])
         let expected: Primitive = .orderedDict([
             .uint(0): .orderedSet(
                 try OrderedSet([
@@ -2849,52 +2900,7 @@ struct TxBuilderTests {
                 ])
             ]),
             .uint(2): .uint(180_857),
-            .uint(4): .list([
-                .list([
-                    .uint(3),
-                    .bytes(Data(repeating: 0x31, count: POOL_KEY_HASH_SIZE)),
-                    .bytes(Data(repeating: 0x31, count: VRF_KEY_HASH_SIZE)),
-                    .int(100000000),
-                    .int(340000000),
-                    .cborTag(
-                        CBORTag(
-                            tag: 30,
-                            value: .list([
-                                .uint(UInt(1)),
-                                .uint(UInt(50))
-                            ])
-                        )
-                    ),
-                    .bytes(Data(repeating: 0x31, count: REWARD_ACCOUNT_HASH_SIZE)),
-                    .list([
-                        .bytes(Data(repeating: 0x31, count: VERIFICATION_KEY_HASH_SIZE)),
-                    ]),
-                    .list([
-                        .list([
-                            .uint(0),
-                            .uint(3001),
-                            .bytes(Data([0xC0, 0xA8, 0x00, 0x01])),
-                            .bytes(Data([
-                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
-                            ])),
-                        ]),
-                        .list([
-                            .uint(1),
-                            .uint(3001),
-                            .string("relay1.example.com"),
-                        ]),
-                        .list([
-                            .uint(2),
-                            .string("relay1.example.com"),
-                        ]),
-                    ]),
-                    .list([
-                        .string("https://meta1.example.com"),
-                        .bytes(Data(repeating: 0x31, count: POOL_METADATA_HASH_SIZE)),
-                    ])
-                ])
-            ]),
+            .uint(4): poolRegistrationPrimitive,
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -2967,7 +2973,7 @@ struct TxBuilderTests {
         let txBuilder = TxBuilder(context: chainContext)
         let senderAddress = try Address(from: .string(sender))
         
-        let inputAmount = 10_000_000
+        let inputAmount: Int64 = 10_000_000
         
         let txIn1 = try TransactionInput(from: .list([
             .bytes(Data(repeating: 0x31, count: 32)),
@@ -2975,7 +2981,7 @@ struct TxBuilderTests {
         ]))
         let txOut1 = try TransactionOutput(from: .list([
             .string(sender),
-            .uint(UInt(inputAmount))
+            .uint(UInt64(inputAmount))
         ]))
         let utxo1 = UTxO(input: txIn1, output: txOut1)
         
@@ -3014,7 +3020,7 @@ struct TxBuilderTests {
         let txBuilder = TxBuilder(context: chainContext)
         let senderAddress = try Address(from: .string(sender))
         
-        let inputAmount = 10_000_000
+        let inputAmount: Int64 = 10_000_000
 
         let txIn = try TransactionInput(
             from: .list([
@@ -3067,7 +3073,7 @@ struct TxBuilderTests {
         let receiver = "addr_test1vr2p8st5t5cxqglyjky7vk98k7jtfhdpvhl4e97cezuhn0cqcexl7"
         let receiverAddress = try Address(from: .string(receiver))
         
-        let inputAmount = 10_000_000
+        let inputAmount: Int64 = 10_000_000
 
         let txIn = try TransactionInput(
             from: .list([
@@ -3131,7 +3137,7 @@ struct TxBuilderTests {
         let txBuilder = TxBuilder(context: chainContext)
         let senderAddress = try Address(from: .string(sender))
         
-        let inputAmount = 10_000_000
+        let inputAmount: Int64 = 10_000_000
 
         let txIn = try TransactionInput(
             from: .list([
@@ -3181,7 +3187,7 @@ struct TxBuilderTests {
         let txBuilder = TxBuilder(context: chainContext)
         let senderAddress = try Address(from: .string(sender))
         
-        let inputAmount = 10_000_000
+        let inputAmount: Int64 = 10_000_000
 
         let txIn = try TransactionInput(
             from: .list([
@@ -3864,7 +3870,7 @@ struct TxBuilderTests {
             .addInput(inputUTxO)
             .addInputAddress(.address(senderAddress))
         
-        let mintAmount = 1
+        let mintAmount: Int64 = 1
         txBuilder.mint = try MultiAsset(from: [
             policyId.payload.toHex: ["TestCollateralToken": mintAmount]
         ])
@@ -3899,7 +3905,7 @@ struct TxBuilderTests {
         let totalCollateralInput = collateralUTxO.output.amount + inputUTxO.output.amount
         #expect(
             totalCollateralInput == Value(
-                coin: Int(txBody.totalCollateral!)
+                coin: Int64(txBody.totalCollateral!)
             ) + txBody.collateralReturn!.amount,
             "The total collateral input amount should match the sum of the selected UTxOs"
         )
@@ -3975,6 +3981,6 @@ struct TxBuilderTests {
         let changeAmount = tx.outputs[1]
         #expect(changeAmount.address == vaultAddress)
         #expect(changeAmount.amount.coin  == 40_000_000 + 1_038_710 - 1_326_255 - tx.fee)
-        #expect(changeAmount.amount.multiAsset[tokenPolicyId]![tokenName] == 1_876_083 - 382)
+        #expect(changeAmount.amount.multiAsset[tokenPolicyId]![tokenName] == Int64(1_876_083 - 382))
     }
 }

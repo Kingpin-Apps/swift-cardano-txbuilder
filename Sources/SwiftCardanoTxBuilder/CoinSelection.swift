@@ -81,7 +81,7 @@ public class LargestFirstSelector: UTxOSelector {
             $0.output.lovelace > $1.output.lovelace
         }
         let maxFee = includeMaxFee ? try await Utils.maxTxFee(context) : 0
-        var totalRequested = Value(coin: Int(maxFee))
+        var totalRequested = Value(coin: Int64(maxFee))
 
         for output in outputs {
             totalRequested = totalRequested + output.amount
@@ -119,7 +119,7 @@ public class LargestFirstSelector: UTxOSelector {
                         TransactionOutput(
                             address: FakeAddress.address,
                             amount: Value(
-                                coin: Int(minChangeAmount) - change.coin
+                                coin: Int64(minChangeAmount) - change.coin
                             )
                         )
                     ],
@@ -308,7 +308,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
         // Shallow copy the list
         var remaining = utxos
         let maxFee = includeMaxFee ? try await Utils.maxTxFee(context) : 0
-        var requestSum = Value(coin: Int(maxFee))
+        var requestSum = Value(coin: Int64(maxFee))
 
         for output in outputs {
             requestSum = requestSum + output.amount
@@ -376,7 +376,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
                         TransactionOutput(
                             address: FakeAddress.address,
                             amount: Value(
-                                coin: Int(minChangeAmount) - change.coin
+                                coin: Int64(minChangeAmount) - change.coin
                             )
                         )
                     ],

@@ -21,10 +21,10 @@ private var utxos: [UTxO] {
         )
 
         let amount = Value(
-            coin: (i + 1) * 1_000_000,
+            coin: Int64(i + 1) * 1_000_000,
             multiAsset: MultiAsset([
                 ScriptHash(payload: Data(repeating: 1, count: 28)): Asset([
-                    try AssetName(payload: Data("token\(i)".utf8)): (i + 1) * 100
+                    try AssetName(payload: Data("token\(i)".utf8)): Int64(i + 1) * 100
                 ])
             ])
         )

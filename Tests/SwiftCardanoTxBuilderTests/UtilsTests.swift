@@ -1,5 +1,5 @@
 import Foundation
-import PotentCodables
+import CBORCodable
 import SwiftCardanoChain
 import SwiftCardanoCore
 import Testing
@@ -23,10 +23,10 @@ struct TestMinLoveLaceMultiAsset {
     func testMinLovelaceMultiAsset1() async throws {
         let context = MockChainContext()
         let amount = try Value(
-            from: [
-                2_000_000,
-                [Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: 1_000_000]],
-            ]
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: Int64(1_000_000)]
+            ])
         )
         let result = try await Utils.minLovelacePreAlonzo(amount, context)
         #expect(result == 1_310_316)
@@ -37,14 +37,12 @@ struct TestMinLoveLaceMultiAsset {
         let context = MockChainContext()
 
         let amount = try Value(
-            from: [
-                2_000_000,
-                [
-                    Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [
-                        Data([0x31]).toHex: 1_000_000
-                    ]
-                ],
-            ]
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [
+                    Data([0x31]).toHex: Int64(1_000_000)
+                ]
+            ])
         )
 
         let result = try await Utils.minLovelacePreAlonzo(amount, context)
@@ -56,17 +54,14 @@ struct TestMinLoveLaceMultiAsset {
         let context = MockChainContext()
 
         let amount = try Value(
-            from: [
-                2_000_000,
-                [
-                    Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex:
-                        [
-                            Data([0x31]).toHex: 1_000_000,
-                            Data([0x32]).toHex: 2_000_000,
-                            Data([0x33]).toHex: 3_000_000,
-                        ]
-                ],
-            ]
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [
+                    Data([0x31]).toHex: Int64(1_000_000),
+                    Data([0x32]).toHex: Int64(2_000_000),
+                    Data([0x33]).toHex: Int64(3_000_000),
+                ]
+            ])
         )
 
         let result = try await Utils.minLovelacePreAlonzo(amount, context)
@@ -78,13 +73,11 @@ struct TestMinLoveLaceMultiAsset {
         let context = MockChainContext()
 
         let amount = try Value(
-            from: [
-                2_000_000,
-                [
-                    Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: 1_000_000],
-                    Data(repeating: 0x32, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: 1_000_000],
-                ],
-            ]
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: Int64(1_000_000)],
+                Data(repeating: 0x32, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: Int64(1_000_000)],
+            ])
         )
 
         let result = try await Utils.minLovelacePreAlonzo(amount, context)
@@ -96,17 +89,15 @@ struct TestMinLoveLaceMultiAsset {
         let context = MockChainContext()
 
         let amount = try Value(
-            from: [
-                2_000_000,
-                [
-                    Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [
-                        Data([0x31]).toHex: 1_000_000
-                    ],
-                    Data(repeating: 0x32, count: SCRIPT_HASH_SIZE).toHex: [
-                        Data([0x32]).toHex: 1_000_000
-                    ],
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [
+                    Data([0x31]).toHex: Int64(1_000_000)
                 ],
-            ]
+                Data(repeating: 0x32, count: SCRIPT_HASH_SIZE).toHex: [
+                    Data([0x32]).toHex: Int64(1_000_000)
+                ],
+            ])
         )
 
         let result = try await Utils.minLovelacePreAlonzo(amount, context)
@@ -117,34 +108,32 @@ struct TestMinLoveLaceMultiAsset {
     func testMinLovelaceMultiAsset6() async throws {
         let context = MockChainContext()
 
-        var policy1Assets: [String: Int] = [:]
-        var policy2Assets: [String: Int] = [:]
-        var policy3Assets: [String: Int] = [:]
+        var policy1Assets: [String: Int64] = [:]
+        var policy2Assets: [String: Int64] = [:]
+        var policy3Assets: [String: Int64] = [:]
 
         // Create assets for policy 1 (range 1-32)
         for i in 1...32 {
-            policy1Assets[Data([UInt8(i)]).toHex] = 1_000_000 * i
+            policy1Assets[Data([UInt8(i)]).toHex] = Int64(1_000_000 * i)
         }
 
         // Create assets for policy 2 (range 32-63)
         for i in 32...63 {
-            policy2Assets[Data([UInt8(i)]).toHex] = 1_000_000 * i
+            policy2Assets[Data([UInt8(i)]).toHex] = Int64(1_000_000 * i)
         }
 
         // Create assets for policy 3 (range 64-95)
         for i in 64...95 {
-            policy3Assets[Data([UInt8(i)]).toHex] = 1_000_000 * i
+            policy3Assets[Data([UInt8(i)]).toHex] = Int64(1_000_000 * i)
         }
 
         let amount = try Value(
-            from: [
-                2_000_000,
-                [
-                    Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: policy1Assets,
-                    Data(repeating: 0x32, count: SCRIPT_HASH_SIZE).toHex: policy2Assets,
-                    Data(repeating: 0x33, count: SCRIPT_HASH_SIZE).toHex: policy3Assets,
-                ],
-            ]
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: policy1Assets,
+                Data(repeating: 0x32, count: SCRIPT_HASH_SIZE).toHex: policy2Assets,
+                Data(repeating: 0x33, count: SCRIPT_HASH_SIZE).toHex: policy3Assets,
+            ])
         )
 
         let result = try await Utils.minLovelacePreAlonzo(amount, context)
@@ -156,10 +145,10 @@ struct TestMinLoveLaceMultiAsset {
         let context = MockChainContext()
 
         let amount = try Value(
-            from: [
-                2_000_000,
-                [Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: 1_000_000]],
-            ]
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: Int64(1_000_000)]
+            ])
         )
 
         let result = try await Utils.minLovelacePreAlonzo(amount, context, hasDatum: true)
@@ -171,16 +160,14 @@ struct TestMinLoveLaceMultiAsset {
         let context = MockChainContext()
 
         let amount = try Value(
-            from: [
-                2_000_000,
-                [
-                    Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [
-                        Data(repeating: 0x31, count: 32).toHex: 1_000_000,
-                        Data(repeating: 0x32, count: 32).toHex: 1_000_000,
-                        Data(repeating: 0x33, count: 32).toHex: 1_000_000,
-                    ]
-                ],
-            ]
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [
+                    Data(repeating: 0x31, count: 32).toHex: Int64(1_000_000),
+                    Data(repeating: 0x32, count: 32).toHex: Int64(1_000_000),
+                    Data(repeating: 0x33, count: 32).toHex: Int64(1_000_000),
+                ]
+            ])
         )
 
         let result = try await Utils.minLovelacePreAlonzo(amount, context, hasDatum: true)
@@ -192,13 +179,11 @@ struct TestMinLoveLaceMultiAsset {
         let context = MockChainContext()
 
         let amount = try Value(
-            from: [
-                2_000_000,
-                [
-                    Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: 1_000_000],
-                    Data(repeating: 0x32, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: 1_000_000],
-                ],
-            ]
+            coin: 2_000_000,
+            multiAsset: MultiAsset(from: [
+                Data(repeating: 0x31, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: Int64(1_000_000)],
+                Data(repeating: 0x32, count: SCRIPT_HASH_SIZE).toHex: [Data().toHex: Int64(1_000_000)],
+            ])
         )
 
         let result = try await Utils.minLovelacePreAlonzo(amount, context, hasDatum: true)
