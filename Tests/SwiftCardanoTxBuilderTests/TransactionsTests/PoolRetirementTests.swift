@@ -40,5 +40,24 @@ struct PoolRetirementTests {
         }
         #expect(hasPoolRetirement, "Should have a PoolRetirement certificate")
         #expect(body.fee > 0, "Transaction fee should be non-zero")
+
+        // Value conservation: a pool retirement certificate does NOT refund the
+        // stake-pool deposit in this transaction (the ledger returns it to the
+        // reward account at the retirement epoch). Consumed (inputs) must equal
+        // produced (outputs + fee); a regression that credits stakePoolDeposit
+        // would make the outputs exceed the inputs by the deposit and the ledger
+        // would reject the tx with ValueNotConservedUTxO.
+        let availableUtxos = try await chainContext.utxos(address: feePaymentAddress)
+        var inputTotal: Int64 = 0
+        for input in body.inputs.asArray {
+            if let utxo = availableUtxos.first(where: { $0.input == input }) {
+                inputTotal += utxo.output.amount.coin
+            }
+        }
+        let outputTotal = body.outputs.reduce(Int64(0)) { $0 + $1.amount.coin }
+        #expect(
+            inputTotal == outputTotal + Int64(body.fee),
+            "Pool retirement must conserve value (no deposit refund): inputs \(inputTotal) != outputs \(outputTotal) + fee \(body.fee)"
+        )
     }
 }

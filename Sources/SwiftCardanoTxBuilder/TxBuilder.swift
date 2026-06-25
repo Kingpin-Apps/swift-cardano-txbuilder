@@ -1410,8 +1410,11 @@ public class TxBuilder: Loggable {
                     refundTotal += Int64(unreg.coin)
                 case .stakeDeregistration:
                     refundTotal += protocolParameters.stakeAddressDeposit
-                case .poolRetirement:
-                    refundTotal += protocolParameters.stakePoolDeposit
+                // NOTE: pool retirement does NOT refund the stake-pool deposit in the
+                // retirement-certificate transaction — the ledger returns it to the
+                // pool's reward account at the start of the retirement epoch. Crediting
+                // it here over-states the balance by `stakePoolDeposit` and the tx is
+                // rejected with ValueNotConservedUTxO.
                 default:
                     break
             }

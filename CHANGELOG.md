@@ -1,3 +1,9 @@
+## 1.0.2 (2026-06-25)
+
+### Fix
+
+- don't credit the stake-pool deposit refund for pool retirement (the ledger returns it at the retirement epoch, not in the cert tx) — fixes ValueNotConservedUTxO
+
 ## 1.0.1 (2026-06-25)
 
 ### Fix
