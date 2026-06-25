@@ -1,3 +1,9 @@
+## 1.0.1 (2026-06-25)
+
+### Fix
+
+- credit deregistration and retirement deposit refunds when computing change
+
 ## 1.0.0 (2026-05-29)
 
 ### Feat
