@@ -1244,6 +1244,8 @@ public class TxBuilder: Loggable {
 
         provided.coin -= try await getTotalKeyDeposit()
         provided.coin -= getTotalProposalDeposit()
+        // Deregistration / retirement certs return their deposit to the wallet.
+        provided.coin += try await getTotalKeyRefund()
 
         guard canCoverRequested(provided: provided, requested: requested) else {
             print("Requested: \(requested)")
@@ -1389,6 +1391,32 @@ public class TxBuilder: Loggable {
             protocolParameters.stakePoolDeposit * Int64(stakePoolRegistrationCerts.count)
 
         return stakeRegistrationDeposit + stakePoolRegistrationDeposit
+    }
+
+    /// Total deposits returned to the wallet by deregistration / retirement
+    /// certificates. These are implicit inputs and must be credited when
+    /// computing change, otherwise the transaction is short by the refund amount
+    /// (ValueNotConservedUTxO). Intentionally NOT applied during coin selection,
+    /// so the selector still picks at least one input to fund the fee.
+    private func getTotalKeyRefund() async throws -> Int64 {
+        guard let certificates = certificates else { return 0 }
+        let protocolParameters = try await context.protocolParameters()
+        var refundTotal: Int64 = 0
+        for cert in certificates {
+            switch cert {
+                case .unregister(let unreg):
+                    refundTotal += Int64(unreg.coin)
+                case .unRegisterDRep(let unreg):
+                    refundTotal += Int64(unreg.coin)
+                case .stakeDeregistration:
+                    refundTotal += protocolParameters.stakeAddressDeposit
+                case .poolRetirement:
+                    refundTotal += protocolParameters.stakePoolDeposit
+                default:
+                    break
+            }
+        }
+        return refundTotal
     }
 
     private func getTotalProposalDeposit() -> Int64 {
