@@ -1,8 +1,14 @@
+## 1.0.3 (2026-07-08)
+
+### Fix
+
+- **platforms**: declare iOS 18 floor; require core 0.5.0 / chain 0.7.0
+
 ## 1.0.2 (2026-06-25)
 
 ### Fix
 
-- don't credit the stake-pool deposit refund for pool retirement (the ledger returns it at the retirement epoch, not in the cert tx) — fixes ValueNotConservedUTxO
+- don't credit pool-retirement deposit refund in change (ValueNotConservedUTxO)
 
 ## 1.0.1 (2026-06-25)
 
