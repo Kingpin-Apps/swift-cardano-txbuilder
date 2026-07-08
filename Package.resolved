@@ -1,5 +1,5 @@
 {
-  "originHash" : "df30f5fb0af3beb0628ae211af22183cbb02c77cacf5e80126e0f2050b7fec9b",
+  "originHash" : "e929ac41915f37ddc2c053822974d59f4632121a0b138688d54d2c53fa8cd6c2",
   "pins" : [
     {
       "identity" : "base32",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe",
         "version" : "5.7.0"
-      }
-    },
-    {
-      "identity" : "command",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tuist/Command.git",
-      "state" : {
-        "revision" : "f999066030f392792065978f22c5deba0fdd0fae",
-        "version" : "0.14.4"
       }
     },
     {
@@ -47,30 +38,12 @@
       }
     },
     {
-      "identity" : "mockable",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Kolos65/Mockable",
-      "state" : {
-        "revision" : "bd20509c34ca3205003677747ad8dcb70d18b7ca",
-        "version" : "0.6.2"
-      }
-    },
-    {
       "identity" : "openapikit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mattpolzin/OpenAPIKit",
       "state" : {
         "revision" : "343b2c1793058fcc53c1bd7e2907f8e3a4d640fb",
         "version" : "3.9.0"
-      }
-    },
-    {
-      "identity" : "path",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tuist/Path",
-      "state" : {
-        "revision" : "7c74ac435e03a927c3a73134c48b61e60221abcb",
-        "version" : "0.3.8"
       }
     },
     {
@@ -132,8 +105,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-blockfrost-api.git",
       "state" : {
-        "revision" : "1e4db8c4e4af8c59085e06f18c4185c47fac1a19",
-        "version" : "0.2.0"
+        "revision" : "b7ade6420034b41606c8a55753588cf0a765f67a",
+        "version" : "0.2.1"
       }
     },
     {
@@ -150,8 +123,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-chain.git",
       "state" : {
-        "revision" : "b8885515eed6c48cdc546ba1c162f777fef06a82",
-        "version" : "0.5.0"
+        "revision" : "1e4c4a2cbde01a40c2df01ff4341bc3cca330842",
+        "version" : "0.7.0"
       }
     },
     {
@@ -159,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-core.git",
       "state" : {
-        "revision" : "096243346ab6a9e6c5a57992cb1c694a9795dc52",
-        "version" : "0.4.3"
+        "revision" : "b38df7490bc7c84611a5b8bbad93c29749a07bb5",
+        "version" : "0.5.0"
       }
     },
     {
@@ -179,15 +152,6 @@
       "state" : {
         "revision" : "be48d1905270e0bb639267570edd7a0d50cca9f0",
         "version" : "0.3.0"
-      }
-    },
-    {
-      "identity" : "swift-cardano-utils",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Kingpin-Apps/swift-cardano-utils.git",
-      "state" : {
-        "revision" : "131019429e2d918891928944997799ee060f4113",
-        "version" : "0.5.1"
       }
     },
     {
@@ -215,24 +179,6 @@
       "state" : {
         "revision" : "03cc312c2c933ed87abace34044a5dff7a3117c1",
         "version" : "1.5.0"
-      }
-    },
-    {
-      "identity" : "swift-configuration",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-configuration",
-      "state" : {
-        "revision" : "be76c4ad929eb6c4bcaf3351799f2adf9e6848a9",
-        "version" : "1.2.0"
-      }
-    },
-    {
-      "identity" : "swift-configuration-toml",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/mattt/swift-configuration-toml.git",
-      "state" : {
-        "revision" : "4ea16b4dfa4b023cecae5ae0368402c4d846d613",
-        "version" : "2.0.0"
       }
     },
     {
@@ -443,30 +389,12 @@
       }
     },
     {
-      "identity" : "swift-syntax",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-syntax.git",
-      "state" : {
-        "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
-        "version" : "602.0.0"
-      }
-    },
-    {
       "identity" : "swift-system",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-system.git",
       "state" : {
         "revision" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
         "version" : "1.6.4"
-      }
-    },
-    {
-      "identity" : "swift-toml",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/mattt/swift-toml.git",
-      "state" : {
-        "revision" : "827506c90475e82d5a7f191f950fb3025cbdc0d6",
-        "version" : "2.0.0"
       }
     },
     {
@@ -485,15 +413,6 @@
       "state" : {
         "revision" : "90bbbdab3ede12c803cfbe91646f291c092517a3",
         "version" : "2.16.2"
-      }
-    },
-    {
-      "identity" : "xctest-dynamic-overlay",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
-      "state" : {
-        "revision" : "4c27acf5394b645b70d8ba19dc249c0472d5f618",
-        "version" : "1.7.0"
       }
     },
     {
