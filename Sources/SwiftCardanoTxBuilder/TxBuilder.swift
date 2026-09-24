@@ -1862,8 +1862,9 @@ public class TxBuilder: Loggable {
     private func scriptDataHash() async throws -> ScriptDataHash? {
         if !datums.isEmpty || !_redeemerList.isEmpty {
             var costModels: [Int: [Int64]] = [:]
+            let protocolParams = try await context.protocolParameters()
             for script in allScripts {
-                var version = -1
+                let version: Int
                 switch script {
                     case .plutusV1Script(let plutusScript):
                         version = plutusScript.version
@@ -1871,14 +1872,15 @@ public class TxBuilder: Loggable {
                         version = plutusScript.version
                     case .plutusV3Script(let plutusScript):
                         version = plutusScript.version
-                    case .nativeScript(_):
-                        version = 1
+                    case .nativeScript:
+                        // Native scripts have no cost model and contribute no
+                        // language view. Counting them as PlutusV1 pulled the
+                        // V1 cost model into the script integrity hash and
+                        // produced a hash the ledger disagrees with.
+                        continue
                 }
 
-                let protocolParams = try await context.protocolParameters()
-                if version != -1 {
-                    costModels[version - 1] = protocolParams.costModels.getVersion(version)
-                }
+                costModels[version - 1] = protocolParams.costModels.getVersion(version)
             }
             return try Utils.scriptDataHash(
                 redeemers: try redeemers(),
