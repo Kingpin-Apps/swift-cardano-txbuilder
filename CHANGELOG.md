@@ -1,3 +1,9 @@
+## 1.0.4 (2026-09-23)
+
+### Fix
+
+- stop counting native scripts as PlutusV1 in the script integrity hash
+
 ## 1.0.3 (2026-07-08)
 
 ### Fix
