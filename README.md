@@ -28,7 +28,7 @@ Add this to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Kingpin-Apps/swift-cardano-txbuilder.git", from: "0.1.0"),
+    .package(url: "https://github.com/Kingpin-Apps/swift-cardano-txbuilder.git", from: "1.1.0"),
 ]
 ```
 
@@ -385,6 +385,32 @@ The builder automatically handles:
 - Script execution unit estimation
 - Collateral calculation for script transactions
 - Minimum UTxO requirements
+
+To show the fee item by item, or the units each script needs, without changing the builder:
+
+```swift
+let breakdown = try await builder.estimateFeeBreakdown()
+breakdown.sizeFee                // size × fee per byte
+breakdown.executionFee           // script steps and memory
+breakdown.referenceScriptTiers   // reference-script bytes, tier by tier
+breakdown.total
+
+let units = try await builder.evaluateExecutionUnits(changeAddress: changeAddress)
+```
+
+### Governance Scripts
+
+A DRep or committee member whose credential is a script votes with `addVotingScript`;
+a proposal that must run the constitution's guardrail script adds it with
+`addProposalScript`, after the proposal:
+
+```swift
+builder.addVote(voter: Voter(credential: .drepScriptHash(drepHash)), govActionId: actionId, vote: .yes)
+try builder.addVotingScript(.script(.plutusV3Script(drepScript)), redeemer: redeemer)
+
+builder.addProposal(deposit: deposit, rewardAccount: rewardAccount, govAction: action, anchor: anchor)
+try builder.addProposalScript(.utxo(guardrailReferenceUTxO), redeemer: redeemer)
+```
 
 ### Error Handling
 
