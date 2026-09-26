@@ -124,6 +124,8 @@ public class TxBuilder: Loggable {
     private var _mintingScriptToRedeemers: [(ScriptType, Redeemer?)] = []
     private var _withdrawalScriptToRedeemers: [(ScriptType, Redeemer?)] = []
     private var _certificateScriptToRedeemers: [(ScriptType, Redeemer?)] = []
+    private var _votingScriptToRedeemers: [(ScriptType, Redeemer?)] = []
+    private var _proposalScriptToRedeemers: [(ScriptType, Redeemer?)] = []
     private var _inputsToScripts: [UTxO: ScriptType] = [:]
     private var _referenceScripts: [ScriptType] = []
     private var _shouldEstimateExecutionUnits: Bool?
@@ -433,6 +435,84 @@ public class TxBuilder: Loggable {
         return self
     }
 
+    /// Add the script of a script voter — a DRep or constitutional committee
+    /// member whose credential is a script — along with its redeemer.
+    ///
+    /// The redeemer's index is set when the transaction is built, to the
+    /// voter's position in the ledger's voter order. Add the vote itself with
+    /// ``addVote(voter:govActionId:vote:anchor:)``.
+    /// - Parameters:
+    ///   - script: A plutus script or UTxO containing a script
+    ///   - redeemer: A plutus redeemer for voting
+    /// - Returns: Current transaction builder
+    @discardableResult
+    public func addVotingScript(
+        _ script: ScriptOrUTxO,
+        redeemer: Redeemer? = nil
+    ) throws -> TxBuilder {
+        let modifiedRedeemer = try taggedRedeemer(redeemer, tag: .voting)
+        try appendScript(script, redeemer: modifiedRedeemer, to: &_votingScriptToRedeemers)
+        return self
+    }
+
+    /// Add a proposal policy script — the constitution's guardrail script,
+    /// which a parameter-change or treasury-withdrawal proposal must run —
+    /// along with its redeemer.
+    ///
+    /// WARNING: The order of operations matters. The redeemer's index is set to
+    /// the index of the last proposal added.
+    /// - Parameters:
+    ///   - script: A plutus script or UTxO containing a script
+    ///   - redeemer: A plutus redeemer for proposing
+    /// - Returns: Current transaction builder
+    @discardableResult
+    public func addProposalScript(
+        _ script: ScriptOrUTxO,
+        redeemer: Redeemer? = nil
+    ) throws -> TxBuilder {
+        var modifiedRedeemer = try taggedRedeemer(redeemer, tag: .proposing)
+        if modifiedRedeemer != nil {
+            guard let proposals = proposalProcedures, !proposals.elements.isEmpty else {
+                throw CardanoTxBuilderError.invalidState(
+                    "No proposals found. Redeemer index needs to be set to the index of the corresponding proposal."
+                )
+            }
+            modifiedRedeemer?.index = proposals.elements.count - 1
+        }
+        try appendScript(script, redeemer: modifiedRedeemer, to: &_proposalScriptToRedeemers)
+        return self
+    }
+
+    /// `redeemer` with `tag`, refusing one already tagged otherwise.
+    private func taggedRedeemer(_ redeemer: Redeemer?, tag: RedeemerTag) throws -> Redeemer? {
+        guard var redeemer else { return nil }
+        if let existing = redeemer.tag, existing != tag {
+            throw CardanoTxBuilderError.invalidInput("Expected redeemer tag \(tag) but got \(existing)")
+        }
+        redeemer.tag = tag
+        try consolidateRedeemer(&redeemer)
+        return redeemer
+    }
+
+    /// Records a script and its redeemer, taking a UTxO's script as a reference script.
+    private func appendScript(
+        _ script: ScriptOrUTxO,
+        redeemer: Redeemer?,
+        to storage: inout [(ScriptType, Redeemer?)]
+    ) throws {
+        switch script {
+        case .utxo(let utxo):
+            guard let outputScript = utxo.output.script else {
+                throw CardanoTxBuilderError.invalidInput("Expected script in UTxO but found none")
+            }
+            storage.append((outputScript, redeemer))
+            referenceInputs.insert(.utxo(utxo))
+            _referenceScripts.append(outputScript)
+        case .script(let scriptType):
+            storage.append((scriptType, redeemer))
+        }
+    }
+
     /// Add an address to transaction's input address.
     /// Unlike `addInput`, which deterministically adds a UTxO to the transaction's inputs,
     /// `addInputAddress` will not immediately select any UTxO when called. Instead, it will
@@ -571,6 +651,8 @@ public class TxBuilder: Loggable {
         copy._mintingScriptToRedeemers = self._mintingScriptToRedeemers
         copy._withdrawalScriptToRedeemers = self._withdrawalScriptToRedeemers
         copy._certificateScriptToRedeemers = self._certificateScriptToRedeemers
+        copy._votingScriptToRedeemers = self._votingScriptToRedeemers
+        copy._proposalScriptToRedeemers = self._proposalScriptToRedeemers
         copy._inputsToScripts = self._inputsToScripts
         copy._referenceScripts = self._referenceScripts
         copy._shouldEstimateExecutionUnits = self._shouldEstimateExecutionUnits
@@ -650,7 +732,7 @@ public class TxBuilder: Loggable {
             scripts[_scriptHash] = script
         }
 
-        for (script, _) in _certificateScriptToRedeemers {
+        for (script, _) in _certificateScriptToRedeemers + _votingScriptToRedeemers + _proposalScriptToRedeemers {
             let _scriptHash = try! scriptHash(script: script)
             scripts[_scriptHash] = script
         }
@@ -692,6 +774,8 @@ public class TxBuilder: Loggable {
         redeemers += _mintingScriptToRedeemers.compactMap { $0.1 }
         redeemers += _withdrawalScriptToRedeemers.compactMap { $0.1 }
         redeemers += _certificateScriptToRedeemers.compactMap { $0.1 }
+        redeemers += _votingScriptToRedeemers.compactMap { $0.1 }
+        redeemers += _proposalScriptToRedeemers.compactMap { $0.1 }
 
         redeemers.sort { $0.index < $1.index }
         return redeemers
@@ -1989,6 +2073,45 @@ public class TxBuilder: Loggable {
                 }
             }
         }
+
+        // Set voting redeemer indices: the script voter's position in the
+        // ledger's voter order.
+        let voters = Self.orderedVoters(votingProcedures)
+        _votingScriptToRedeemers = try _votingScriptToRedeemers.map { script, redeemer in
+            guard var redeemer else { return (script, nil) }
+            let hash = try scriptHash(script: script).payload
+            if let index = voters.firstIndex(where: { voter in
+                switch voter.credential {
+                case .drepScriptHash(let h), .constitutionalCommitteeHotScriptHash(let h): return h.payload == hash
+                default: return false
+                }
+            }) {
+                redeemer.index = index
+            }
+            return (script, redeemer)
+        }
+    }
+
+    /// Voters in the ledger's order — committee, then DReps, then pools;
+    /// scripts before keys within a role; then by hash. A `voting` redeemer's
+    /// index counts through this order.
+    static func orderedVoters(_ procedures: VotingProcedures?) -> [Voter] {
+        guard let procedures else { return [] }
+        func key(_ voter: Voter) -> (role: Int, isKey: Bool, hash: Data) {
+            switch voter.credential {
+            case .constitutionalCommitteeHotScriptHash(let h): return (0, false, h.payload)
+            case .constitutionalCommitteeHotKeyhash(let h): return (0, true, h.payload)
+            case .drepScriptHash(let h): return (1, false, h.payload)
+            case .drepKeyhash(let h): return (1, true, h.payload)
+            case .stakePoolKeyhash(let h): return (2, true, h.payload)
+            }
+        }
+        return procedures.voters.sorted { lhs, rhs in
+            let (l, r) = (key(lhs), key(rhs))
+            if l.role != r.role { return l.role < r.role }
+            if l.isKey != r.isKey { return !l.isKey }
+            return l.hash.lexicographicallyPrecedes(r.hash)
+        }
     }
 
     /// Check if the collateral return should be added to the transaction
@@ -2205,9 +2328,22 @@ public class TxBuilder: Loggable {
                         }
                         return (script, storedRedeemer)
                     }
-                case .voting, .proposing:
-                    // TODO: Add support for voting and proposing redeemers when storage is implemented
-                    break
+                case .voting:
+                    _votingScriptToRedeemers = _votingScriptToRedeemers.map { (script, storedRedeemer) in
+                        if let storedRedeemer = storedRedeemer,
+                           storedRedeemer.index == redeemer.index && storedRedeemer.tag == .voting {
+                            return (script, redeemer)
+                        }
+                        return (script, storedRedeemer)
+                    }
+                case .proposing:
+                    _proposalScriptToRedeemers = _proposalScriptToRedeemers.map { (script, storedRedeemer) in
+                        if let storedRedeemer = storedRedeemer,
+                           storedRedeemer.index == redeemer.index && storedRedeemer.tag == .proposing {
+                            return (script, redeemer)
+                        }
+                        return (script, storedRedeemer)
+                    }
                 }
             }
         }
