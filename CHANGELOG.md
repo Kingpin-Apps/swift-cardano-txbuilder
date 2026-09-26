@@ -1,3 +1,14 @@
+## 1.1.0 (2026-09-26)
+
+### Feat
+
+- **builder**: add voting and proposal scripts
+- **builder**: expose itemised fee and execution-unit estimates
+
+### Fix
+
+- **builder**: index script withdrawals in ledger order
+
 ## 1.0.5 (2026-09-24)
 
 ## 1.0.4 (2026-09-23)
