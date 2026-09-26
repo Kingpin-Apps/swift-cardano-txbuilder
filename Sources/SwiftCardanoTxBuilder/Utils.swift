@@ -61,41 +61,48 @@ public struct Utils {
     /// - Returns: Fee for reference scripts.
     /// - Throws: ValueError if scripts size exceeds maximum allowed size
     public static func tieredReferenceScriptFee(_ context: any ChainContext, scriptsSize: UInt64) async throws -> UInt64 {
+        try await referenceScriptFeeTiers(context, scriptsSize: scriptsSize).fee
+    }
+
+    /// The reference-script fee, tier by tier.
+    ///
+    /// Reference-script bytes are charged in tiers of `range` bytes, each tier
+    /// at `multiplier` times the price of the one before.
+    public static func referenceScriptFeeTiers(
+        _ context: any ChainContext, scriptsSize: UInt64
+    ) async throws -> (tiers: [FeeBreakdown.ReferenceScriptTier], fee: UInt64) {
         let protocolParameters = try await context.protocolParameters()
-        
-        if protocolParameters.maxReferenceScriptsSize == nil
-            || protocolParameters.minFeeReferenceScripts == nil
-        {
-            return 0
+
+        guard let maxSize = protocolParameters.maxReferenceScriptsSize,
+            let pricing = protocolParameters.minFeeReferenceScripts,
+            let base = pricing.base, let range = pricing.range, let multiplier = pricing.multiplier
+        else {
+            return ([], 0)
         }
-        
-        let maxSize = protocolParameters.maxReferenceScriptsSize!
         if scriptsSize > maxSize {
             throw CardanoTxBuilderError.valueError(
                 "Reference scripts size: \(scriptsSize) exceeds maximum allowed size (\(maxSize))."
             )
         }
-        
+
+        var tiers: [FeeBreakdown.ReferenceScriptTier] = []
         var total: Double = 0.0
         if scriptsSize > 0 {
-            var b = protocolParameters.minFeeReferenceScripts!.base!
-            let r = ceil(protocolParameters.minFeeReferenceScripts!.range!)
-            let m = protocolParameters.minFeeReferenceScripts!.multiplier!
-            
+            var price = base
+            let r = ceil(range)
             var remainingSize = scriptsSize
-            
             while remainingSize > UInt64(r) {
-                total += b * r
+                tiers.append(.init(bytes: UInt64(r), pricePerByte: price, fee: price * r))
+                total += price * r
                 remainingSize = remainingSize - UInt64(r)
-                b = b * m
+                price = price * multiplier
             }
-            
-            total += b * Double(remainingSize)
+            tiers.append(.init(bytes: remainingSize, pricePerByte: price, fee: price * Double(remainingSize)))
+            total += price * Double(remainingSize)
         }
-        
-        return UInt64(ceil(total))
+        return (tiers, UInt64(ceil(total)))
     }
-    
+
     /// Calculate the transaction fee based on the length of a transaction's CBOR bytes and script execution.
     ///
     /// - Parameters:
@@ -112,15 +119,33 @@ public struct Utils {
         maxMemUnit: UInt64 = 0,
         refScriptSize: UInt64 = 0
     ) async throws -> UInt64 {
+        try await feeBreakdown(
+            context, length: length, execSteps: execSteps, maxMemUnit: maxMemUnit, refScriptSize: refScriptSize
+        ).total
+    }
+
+    /// The fee ``calculateFee(_:length:execSteps:maxMemUnit:refScriptSize:)``
+    /// computes, item by item.
+    public static func feeBreakdown(
+        _ context: any ChainContext,
+        length: UInt64,
+        execSteps: UInt64 = 0,
+        maxMemUnit: UInt64 = 0,
+        refScriptSize: UInt64 = 0
+    ) async throws -> FeeBreakdown {
         let protocolParameters = try await context.protocolParameters()
-        
-        let a = ceil(Double(length) * Double(protocolParameters.txFeePerByte))
-        let b = ceil(Double(protocolParameters.txFeeFixed))
-        let c = ceil(Double(execSteps) * Double(protocolParameters.executionUnitPrices.priceSteps))
-        let d = ceil(Double(maxMemUnit) * Double(protocolParameters.executionUnitPrices.priceMemory))
-        let e = Double(try await Utils.tieredReferenceScriptFee(context, scriptsSize: refScriptSize))
-        
-        return UInt64(a + b + c + d + e)
+
+        let sizeFee = UInt64(ceil(Double(length) * Double(protocolParameters.txFeePerByte)))
+        let fixedFee = UInt64(ceil(Double(protocolParameters.txFeeFixed)))
+        let stepsFee = UInt64(ceil(Double(execSteps) * Double(protocolParameters.executionUnitPrices.priceSteps)))
+        let memoryFee = UInt64(ceil(Double(maxMemUnit) * Double(protocolParameters.executionUnitPrices.priceMemory)))
+        let (tiers, referenceScriptFee) = try await referenceScriptFeeTiers(context, scriptsSize: refScriptSize)
+
+        return FeeBreakdown(
+            sizeBytes: length, feePerByte: UInt64(protocolParameters.txFeePerByte), sizeFee: sizeFee,
+            fixedFee: fixedFee, steps: execSteps, stepsFee: stepsFee, memory: maxMemUnit, memoryFee: memoryFee,
+            referenceScriptBytes: refScriptSize, referenceScriptTiers: tiers, referenceScriptFee: referenceScriptFee
+        )
     }
     
     /// Calculate the maximum transaction fee based on protocol parameters.
@@ -250,4 +275,40 @@ public struct Utils {
         return (constantOverhead + UInt64(try tmpOut.toCBORData().count))
         * UInt64(protocolParameters.utxoCostPerByte)
     }
+}
+
+/// A transaction fee, item by item.
+public struct FeeBreakdown: Sendable, Equatable {
+    /// One tier of the reference-script fee.
+    public struct ReferenceScriptTier: Sendable, Equatable {
+        public let bytes: UInt64
+        public let pricePerByte: Double
+        public let fee: Double
+    }
+
+    /// The transaction's size in bytes.
+    public let sizeBytes: UInt64
+    public let feePerByte: UInt64
+    /// `sizeBytes × feePerByte`.
+    public let sizeFee: UInt64
+    /// The fixed part of every fee.
+    public let fixedFee: UInt64
+    /// Plutus execution steps, and what they cost.
+    public let steps: UInt64
+    public let stepsFee: UInt64
+    /// Plutus execution memory, and what it costs.
+    public let memory: UInt64
+    public let memoryFee: UInt64
+    /// Bytes of reference scripts the transaction uses, and their tiered cost.
+    public let referenceScriptBytes: UInt64
+    public let referenceScriptTiers: [ReferenceScriptTier]
+    public let referenceScriptFee: UInt64
+    /// A fixed amount added on top, such as ``TxBuilder/feeBuffer``.
+    public var buffer: UInt64 = 0
+
+    /// The script-execution part: steps plus memory.
+    public var executionFee: UInt64 { stepsFee + memoryFee }
+
+    /// The whole fee.
+    public var total: UInt64 { sizeFee + fixedFee + executionFee + referenceScriptFee + buffer }
 }

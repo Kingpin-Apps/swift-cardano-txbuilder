@@ -1555,6 +1555,16 @@ public class TxBuilder: Loggable {
     }
 
     private func estimateFee() async throws -> Int64 {
+        Int64(try await estimateFeeBreakdown().total)
+    }
+
+    /// The fee this builder would charge for its current state, item by item.
+    ///
+    /// Sized as the signed transaction, with a placeholder witness for every
+    /// signature it needs, and priced with the execution units its redeemers
+    /// declare. Call it after ``build(changeAddress:mergeChange:collateralChangeAddress:)``
+    /// for the fee of the built transaction.
+    public func estimateFeeBreakdown() async throws -> FeeBreakdown {
         var plutusExecutionUnits = ExecutionUnits(mem: 0, steps: 0)
         for redeemer in _redeemerList {
             if let exUnits = redeemer.exUnits {
@@ -1562,19 +1572,34 @@ public class TxBuilder: Loggable {
             }
         }
 
-        var estimatedFee = try await Utils.calculateFee(
+        var breakdown = try await Utils.feeBreakdown(
             context,
             length: UInt64(buildFullFakeTx().toCBORData().count),
             execSteps: UInt64(plutusExecutionUnits.steps),
             maxMemUnit: UInt64(plutusExecutionUnits.mem),
             refScriptSize: UInt64(refScriptSize())
         )
-        
-        if feeBuffer != nil {
-            estimatedFee += UInt64(feeBuffer!)
+        if let feeBuffer {
+            breakdown.buffer = UInt64(feeBuffer)
         }
-        
-        return Int64(estimatedFee)
+        return breakdown
+    }
+
+    /// The execution units each redeemer needs, as the chain context evaluates
+    /// them, keyed `"<tag>:<index>"`.
+    ///
+    /// Builds a copy of this builder to evaluate, so the builder itself is left
+    /// as it was.
+    public func evaluateExecutionUnits(
+        changeAddress: Address? = nil,
+        mergeChange: Bool = false,
+        collateralChangeAddress: Address? = nil
+    ) async throws -> [String: ExecutionUnits] {
+        try await copy().estimateExecutionUnits(
+            changeAddress: changeAddress,
+            mergeChange: mergeChange,
+            collateralChangeAddress: collateralChangeAddress
+        )
     }
 
     private func buildTxBody() async throws -> TransactionBody {
