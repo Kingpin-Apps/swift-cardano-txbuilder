@@ -1,3 +1,9 @@
+## 1.1.1 (2026-09-26)
+
+### Fix
+
+- take a treasury donation out of the change
+
 ## 1.1.0 (2026-09-26)
 
 ### Feat
