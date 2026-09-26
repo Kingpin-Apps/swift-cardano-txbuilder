@@ -968,6 +968,8 @@ public class TxBuilder: Loggable {
 
             selectedAmount.coin -= try await getTotalKeyDeposit()
             selectedAmount.coin -= getTotalProposalDeposit()
+            // A treasury donation leaves the inputs like a deposit does.
+            selectedAmount.coin -= Int64(donation ?? 0)
 
             var requestedAmount = Value()
             for output in outputs {
@@ -1328,6 +1330,7 @@ public class TxBuilder: Loggable {
 
         provided.coin -= try await getTotalKeyDeposit()
         provided.coin -= getTotalProposalDeposit()
+        provided.coin -= Int64(donation ?? 0)
         // Deregistration / retirement certs return their deposit to the wallet.
         provided.coin += try await getTotalKeyRefund()
 
