@@ -1906,7 +1906,15 @@ public class TxBuilder: Loggable {
             let b = try $1.toCBORHex()
             return a < b
         } ?? []
-        let sortedWithdrawals = withdrawals?.data.keys.sorted { $0.toHex < $1.toHex } ?? []
+        // The ledger orders reward accounts by credential, script credentials
+        // before key credentials (bit 4 of the header marks a script), then by
+        // hash — not by the address bytes, whose header would put keys first.
+        let sortedWithdrawals = withdrawals?.data.keys.sorted { lhs, rhs in
+            let lhsScript = (lhs.first ?? 0) & 0x10 != 0
+            let rhsScript = (rhs.first ?? 0) & 0x10 != 0
+            if lhsScript != rhsScript { return lhsScript }
+            return lhs.dropFirst().lexicographicallyPrecedes(rhs.dropFirst())
+        } ?? []
 
         // Set spend redeemer indices
         for (i, utxo) in inputs.enumerated() {
@@ -1941,7 +1949,9 @@ public class TxBuilder: Loggable {
                     network: context.networkId
                 )
                 
-                if let index = sortedWithdrawals.firstIndex(of: scriptStakingCredential.toBytes())
+                if let index = sortedWithdrawals.firstIndex(where: {
+                    $0.dropFirst() == scriptStakingCredential.toBytes().dropFirst()
+                })
                 {
                     redeemer.index = index
                     // Update the array with the modified redeemer
