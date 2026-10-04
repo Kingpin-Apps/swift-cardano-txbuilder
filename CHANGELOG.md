@@ -1,3 +1,9 @@
+## 1.1.2 (2026-10-04)
+
+### Fix
+
+- count the right signers for pool, DRep and committee certificates
+
 ## 1.1.1 (2026-09-26)
 
 ### Fix
