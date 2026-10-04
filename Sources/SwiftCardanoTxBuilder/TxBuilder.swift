@@ -1876,7 +1876,7 @@ public class TxBuilder: Loggable {
         return results
     }
 
-    private func certificateVkeyHashes() -> Set<VerificationKeyHash> {
+    func certificateVkeyHashes() -> Set<VerificationKeyHash> {
         var results = Set<VerificationKeyHash>()
 
         func checkAndAddVkey(_ credential: any Credential) {
@@ -1911,12 +1911,10 @@ public class TxBuilder: Loggable {
                 case .registerDRep(let regDRep):
                     checkAndAddVkey(regDRep.drepCredential)
                 case .poolRegistration(let poolReg):
-                    results
-                        .insert(
-                            VerificationKeyHash(
-                                payload: poolReg.poolParams.vrfKeyHash.payload
-                            )
-                        )
+                    // The pool's cold key and every owner sign; the VRF key
+                    // never does.
+                    results.insert(VerificationKeyHash(payload: poolReg.poolParams.poolOperator.payload))
+                    results.formUnion(poolReg.poolParams.poolOwners.asArray)
                 case .poolRetirement(let poolRet):
                     results
                         .insert(
@@ -1924,6 +1922,14 @@ public class TxBuilder: Loggable {
                                 payload: poolRet.poolKeyHash.payload
                             )
                         )
+                case .unRegisterDRep(let unreg):
+                    checkAndAddVkey(unreg.drepCredential)
+                case .updateDRep(let update):
+                    checkAndAddVkey(update.drepCredential)
+                case .authCommitteeHot(let auth):
+                    checkAndAddVkey(auth.committeeColdCredential)
+                case .resignCommitteeCold(let resign):
+                    checkAndAddVkey(resign.committeeColdCredential)
                 default:
                     break
                 }
