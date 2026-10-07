@@ -26,10 +26,11 @@ struct TxBuilderTests {
         
         let txBody = try await txBuilder.build(changeAddress: senderAddress)
         
-        // Verify specific expected values that match PyCardano test
+        // Verify specific expected values. The fee is sized as the ledger sizes the
+        // transaction, without its validity flag: 44 lovelace under PyCardano's.
         #expect(txBody.inputs.count == 1)
         #expect(txBody.outputs.count == 2)
-        #expect(txBody.fee == 165677)
+        #expect(txBody.fee == 165633)
         
         // First output should be the requested output
         let firstOutput = txBody.outputs[0]
@@ -39,7 +40,7 @@ struct TxBuilderTests {
         // Second output should be change
         let changeOutput = txBody.outputs[1]
         #expect(changeOutput.address == senderAddress)
-        #expect(changeOutput.amount.coin == 4334323)
+        #expect(changeOutput.amount.coin == 4334367)
         
         let expected: Primitive = .orderedDict([
             .uint(0): .orderedSet(
@@ -57,10 +58,10 @@ struct TxBuilderTests {
                 ]),
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(4334323)
+                    .int(4334367)
                 ])
             ]),
-            .uint(2): .uint(165677)
+            .uint(2): .uint(165633)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -135,7 +136,7 @@ struct TxBuilderTests {
                 .list([
                     senderAddress.toPrimitive(),
                     .list([
-                        .int(5_332_167),
+                        .int(5_332_211),
                         .orderedDict([
                             .bytes(Data(repeating: 0x31, count: 28)): .orderedDict([
                                 .bytes("Token1".toData): .int(1),
@@ -145,7 +146,7 @@ struct TxBuilderTests {
                     ])
                 ])
             ]),
-            .uint(2): .uint(167_833)
+            .uint(2): .uint(167_789)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -258,7 +259,7 @@ struct TxBuilderTests {
                 .list([
                     senderAddress.toPrimitive(),
                     .list([
-                        .int(5_827_503),
+                        .int(5_827_547),
                         .orderedDict([
                             .bytes(Data(repeating: 0x31, count: 28)): .orderedDict([
                                 .bytes("Token2".toData): .int(2)
@@ -267,7 +268,7 @@ struct TxBuilderTests {
                     ])
                 ])
             ]),
-            .uint(2): .uint(172_497)
+            .uint(2): .uint(172_453)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -308,7 +309,7 @@ struct TxBuilderTests {
             let _ = try await txBuilder.build(changeAddress: senderAddress)
         }
         
-        #expect(String(describing: error).contains("coin: 991161321"))
+        #expect(String(describing: error).contains("coin: 991161277"))
         #expect(String(describing: error).contains("\"4e6577546f6b656e\" : 1"))
     }
     
@@ -414,10 +415,10 @@ struct TxBuilderTests {
                 ]),
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(1_334_323)
+                    .int(1_334_367)
                 ])
             ]),
-            .uint(2): .uint(165_677)
+            .uint(2): .uint(165_633)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -495,10 +496,10 @@ struct TxBuilderTests {
                 ]),
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(5_832_739)
+                    .int(5_832_783)
                 ])
             ]),
-            .uint(2): .uint(167_261)
+            .uint(2): .uint(167_217)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -590,7 +591,7 @@ struct TxBuilderTests {
                 .list([
                     senderAddress.toPrimitive(),
                     .list([
-                        .int(5_809_155),
+                        .int(5_809_199),
                         .orderedDict([
                             .bytes(Data(repeating: 0x31, count: 28)): .orderedDict([
                                 .bytes("Token1".toData): .int(1),
@@ -600,7 +601,7 @@ struct TxBuilderTests {
                     ])
                 ])
             ]),
-            .uint(2): .uint(190_845),
+            .uint(2): .uint(190_801),
             .uint(3): .uint(123_456_789),
             .uint(8): .uint(1_000),
             .uint(9): mint.toPrimitive(),
@@ -779,7 +780,7 @@ struct TxBuilderTests {
                 .list([
                     senderAddress.toPrimitive(),
                     .list([
-                        .int(2_793_103),
+                        .int(2_793_147),
                         .orderedDict([
                             .bytes(Data(repeating: 0x31, count: 28)): .orderedDict([
                                 .bytes("Token2".toData): .int(2),
@@ -788,7 +789,7 @@ struct TxBuilderTests {
                     ])
                 ])
             ]),
-            .uint(2): .uint(172_497)
+            .uint(2): .uint(172_453)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -2286,7 +2287,7 @@ struct TxBuilderTests {
                 .list([
                     senderAddress.toPrimitive(),
                     .list([
-                        .int(5_332_167),
+                        .int(5_332_211),
                         .orderedDict([
                             .bytes(Data(repeating: 0x31, count: 28)): .orderedDict([
                                 .bytes("Token1".toData): .int(1),
@@ -2296,7 +2297,7 @@ struct TxBuilderTests {
                     ])
                 ])
             ]),
-            .uint(2): .uint(167_833)
+            .uint(2): .uint(167_789)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -2344,7 +2345,7 @@ struct TxBuilderTests {
         let txBodyCBORHex = try tx.transactionBody.toCBORHex()
 
         #expect(tx.transactionWitnessSet.vkeyWitnesses == vkeyWitnesses)
-        #expect(txBodyCBORHex == "a300d9010281825820313131313131313131313131313131313131313131313131313131313131313100018282581d60f6532850e1bccee9c72a9113ad98bcc5dbb30d2ac960262444f6e5f41a0007a12082581d60f6532850e1bccee9c72a9113ad98bcc5dbb30d2ac960262444f6e5f41a004222f3021a0002872d")
+        #expect(txBodyCBORHex == "a300d9010281825820313131313131313131313131313131313131313131313131313131313131313100018282581d60f6532850e1bccee9c72a9113ad98bcc5dbb30d2ac960262444f6e5f41a0007a12082581d60f6532850e1bccee9c72a9113ad98bcc5dbb30d2ac960262444f6e5f41a0042231f021a00028701")
     }
     
     @Test func testEstimateExecutionUnit() async throws {
@@ -2530,10 +2531,10 @@ struct TxBuilderTests {
             .uint(1): .list([
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(9_835_951)
+                    .int(9_835_995)
                 ])
             ]),
-            .uint(2): .uint(164_049)
+            .uint(2): .uint(164_005)
         ])
         
         let txBodyPrimitive = try tx.transactionBody.toPrimitive()
@@ -2592,11 +2593,12 @@ struct TxBuilderTests {
                 ]),
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(2_325_479)
+                    .int(2_325_391)
                 ])
             ]),
-            .uint(2): .uint(174_521),
-            .uint(4): .list([
+            // Certificates are a tagged set: 3 bytes, 132 lovelace more.
+            .uint(2): .uint(174_609),
+            .uint(4): .nonEmptyOrderedSet(NonEmptyOrderedSet([
                 .list([
                     .uint(0),
                     .list([
@@ -2612,7 +2614,7 @@ struct TxBuilderTests {
                     ]),
                     .bytes(Data(repeating: 0x31, count: 28))
                 ])
-            ]),
+            ])),
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -2860,7 +2862,8 @@ struct TxBuilderTests {
                 .string("relay1.example.com"),
             ]),
         ])
-        let poolRegistrationPrimitive: Primitive = .list([
+        // Certificates are a tagged set.
+        let poolRegistrationPrimitive: Primitive = .nonEmptyOrderedSet(NonEmptyOrderedSet([
             .list([
                 .uint(3),
                 .bytes(Data(repeating: 0x31, count: POOL_KEY_HASH_SIZE)),
@@ -2878,7 +2881,7 @@ struct TxBuilderTests {
                     .bytes(Data(repeating: 0x31, count: POOL_METADATA_HASH_SIZE)),
                 ])
             ])
-        ])
+        ]))
         let expected: Primitive = .orderedDict([
             .uint(0): .orderedSet(
                 try OrderedSet([
@@ -2896,10 +2899,10 @@ struct TxBuilderTests {
                         0xc5, 0xdb, 0xb3, 0x0d, 0x2a, 0xc9, 0x60, 0x26,
                         0x24, 0x44, 0xf6, 0xe5, 0xf4
                     ])),
-                    .int(4_819_143)
+                    .int(4_819_055)
                 ])
             ]),
-            .uint(2): .uint(180_857),
+            .uint(2): .uint(180_945),
             .uint(4): poolRegistrationPrimitive,
         ])
         
@@ -2949,10 +2952,10 @@ struct TxBuilderTests {
                 ]),
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(4_338_295)
+                    .int(4_338_339)
                 ])
             ]),
-            .uint(2): .uint(171_705),
+            .uint(2): .uint(171_661),
             .uint(5): .orderedDict([
                 .bytes(Data([
                     0xe0, 0x48, 0x28, 0xa2, 0xda, 0xdb, 0xa9, 0x7c,
@@ -3004,10 +3007,10 @@ struct TxBuilderTests {
             .uint(1): .list([
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(9_835_951)
+                    .int(9_835_995)
                 ])
             ]),
-            .uint(2): .uint(164_049)
+            .uint(2): .uint(164_005)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -3054,10 +3057,10 @@ struct TxBuilderTests {
             .uint(1): .list([
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(9_835_951)
+                    .int(9_835_995)
                 ])
             ]),
-            .uint(2): .uint(164_049)
+            .uint(2): .uint(164_005)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -3121,10 +3124,10 @@ struct TxBuilderTests {
                 ]),
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(9_812_871)
+                    .int(9_812_915)
                 ]),
             ]),
-            .uint(2): .uint(167_129)
+            .uint(2): .uint(167_085)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -3171,10 +3174,10 @@ struct TxBuilderTests {
             .uint(1): .list([
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(9_835_951)
+                    .int(9_835_995)
                 ])
             ]),
-            .uint(2): .uint(164_049)
+            .uint(2): .uint(164_005)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()
@@ -3221,10 +3224,10 @@ struct TxBuilderTests {
             .uint(1): .list([
                 .list([
                     senderAddress.toPrimitive(),
-                    .int(9_835_951)
+                    .int(9_835_995)
                 ])
             ]),
-            .uint(2): .uint(164_049)
+            .uint(2): .uint(164_005)
         ])
         
         let txBodyPrimitive = try txBody.toPrimitive()

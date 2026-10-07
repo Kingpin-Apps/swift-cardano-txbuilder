@@ -1,6 +1,7 @@
 import Foundation
 import Logging
 import SwiftCardanoChain
+import SwiftCardanoCIP21
 import SwiftCardanoCore
 
 /// A class builder that makes it easy to build a transaction.
@@ -75,6 +76,16 @@ public class TxBuilder: Loggable {
 
     /// Override for witness count
     public var witnessOverride: Int?
+
+    /// Build for hardware wallets (CIP-21).
+    ///
+    /// The body is written as CIP-21 asks: canonical CBOR, no empty
+    /// collections, and every set tagged 258. That is done before the fee is
+    /// worked out, so the fee is sized from the bytes that will be signed. A
+    /// transaction that does something hardware wallets refuse, such as a
+    /// certificate they cannot sign or a pool registration that is not alone,
+    /// fails to build with ``CardanoTxBuilderError/cip21Incompatible(_:)``.
+    public var cip21Compatible: Bool = false
 
     /// Whether this is an initial stake pool registration
     public var initialStakePoolRegistration: Bool = false
@@ -662,6 +673,7 @@ public class TxBuilder: Loggable {
         copy.currentTreasuryValue = self.currentTreasuryValue
         copy.donation = self.donation
         copy.witnessOverride = self.witnessOverride
+        copy.cip21Compatible = self.cip21Compatible
         copy.initialStakePoolRegistration = self.initialStakePoolRegistration
         copy.useRedeemerMap = self.useRedeemerMap
         
@@ -1148,7 +1160,10 @@ public class TxBuilder: Loggable {
             try await addChangeAndFee(changeAddress: changeAddress, mergeChange: mergeChange)
             
             let txBody = try await buildTxBody()
-            
+            if cip21Compatible {
+                try await checkCIP21()
+            }
+
             logState(logLevel: .debug)
 
             return txBody
@@ -1647,9 +1662,9 @@ public class TxBuilder: Loggable {
 
     /// The fee this builder would charge for its current state, item by item.
     ///
-    /// Sized as the signed transaction, with a placeholder witness for every
-    /// signature it needs, and priced with the execution units its redeemers
-    /// declare. Call it after ``build(changeAddress:mergeChange:collateralChangeAddress:)``
+    /// Sized as the ledger sizes the signed transaction, with a placeholder
+    /// witness for every signature it needs (see ``ledgerSize(of:)``), and
+    /// priced with the execution units its redeemers declare. Call it after ``build(changeAddress:mergeChange:collateralChangeAddress:)``
     /// for the fee of the built transaction.
     public func estimateFeeBreakdown() async throws -> FeeBreakdown {
         var plutusExecutionUnits = ExecutionUnits(mem: 0, steps: 0)
@@ -1661,7 +1676,7 @@ public class TxBuilder: Loggable {
 
         var breakdown = try await Utils.feeBreakdown(
             context,
-            length: UInt64(buildFullFakeTx().toCBORData().count),
+            length: UInt64(Self.ledgerSize(of: try await buildFullFakeTx())),
             execSteps: UInt64(plutusExecutionUnits.steps),
             maxMemUnit: UInt64(plutusExecutionUnits.mem),
             refScriptSize: UInt64(refScriptSize())
@@ -1700,11 +1715,13 @@ public class TxBuilder: Loggable {
             outputs: outputs,
             fee: Coin(fee),
             ttl: ttl,
-//            certificates: certificates == nil || certificates!.isEmpty
-//            ? nil : .nonEmptyOrderedSet(
-//                NonEmptyOrderedSet<Certificate>(certificates!)
-//            ),
-            certificates: certificates == nil || certificates!.isEmpty ? nil : .list(certificates!),
+            // A tagged set, like the inputs: the body then uses one set
+            // encoding throughout, as hardware wallets ask (CIP-21), and is
+            // written the way the ledger and cardano-cli write it back. The fee
+            // is sized from this same body, so re-encoding it does not change
+            // what it costs.
+            certificates: certificates == nil || certificates!.isEmpty
+                ? nil : .nonEmptyOrderedSet(NonEmptyOrderedSet<Certificate>(certificates!)),
             withdrawals: withdrawals,
             update: nil,
             auxiliaryDataHash: try auxiliaryData?.hash(),
@@ -1740,7 +1757,7 @@ public class TxBuilder: Loggable {
                     UInt(donation!)
                 )
         )
-        return txBody
+        return try cip21Written(txBody)
     }
 
     private func buildFullFakeTx() async throws -> Transaction {
@@ -1750,6 +1767,8 @@ public class TxBuilder: Loggable {
             // When fee is not specified, we will use max possible fee to fill in the fee field.
             // This will make sure the size of fee field itself is taken into account during fee estimation.
             txBody.fee = try await Utils.maxTxFee(context)
+            // A new fee is a new encoding: write it the CIP-21 way again.
+            txBody = try cip21Written(txBody)
         }
 
         let witness = try buildFakeWitnessSet()
@@ -1762,17 +1781,51 @@ public class TxBuilder: Loggable {
 
         let protocolParameters = try await context.protocolParameters()
         
-        let size = try tx.toCBORData().count
+        let size = try Self.ledgerSize(of: tx)
 
         if size > protocolParameters.maxTxSize {
             throw CardanoTxBuilderError.transactionTooLarge(
-                "Transaction size (\(try tx.toCBORData().count)) exceeds the max limit "
+                "Transaction size (\(size)) exceeds the max limit "
                     + "(\(protocolParameters.maxTxSize)). Please try reducing the "
                     + "number of inputs or outputs."
             )
         }
 
         return tx
+    }
+
+    /// `body` as CIP-21 asks for it to be written, when building for
+    /// hardware wallets; otherwise `body` as it is. The body keeps the bytes
+    /// it is written with, so its size and id are those of these bytes.
+    private func cip21Written(_ body: TransactionBody) throws -> TransactionBody {
+        guard cip21Compatible else { return body }
+        return try TransactionBody.fromCBOR(data: try CIP21.compatibleBody(try body.toCBORData()))
+    }
+
+    /// Throws when hardware wallets cannot sign what this builder builds.
+    private func checkCIP21() async throws {
+        let report = try CIP21.report(try await buildFullFakeTx().toCBORData())
+        guard report.isCompatible else {
+            let reasons = report.findings.map { finding in
+                finding.path.map { "\(finding.message) (\($0))" } ?? finding.message
+            }
+            throw CardanoTxBuilderError.cip21Incompatible(
+                "Hardware wallets cannot sign this transaction (CIP-21): " + reasons.joined(separator: " ")
+            )
+        }
+    }
+
+    /// The size the ledger charges the fee on, and holds to the maximum
+    /// transaction size: the transaction without its one-byte validity flag.
+    ///
+    /// From Alonzo on a transaction is written `[body, witnesses, isValid,
+    /// auxiliary data]`, but the ledger sizes it as `[body, witnesses,
+    /// auxiliary data]` (`toCBORForSizeComputation`), so the flag never
+    /// changes the fee. Sizing the whole array would charge a byte the node
+    /// does not.
+    static func ledgerSize(of transaction: Transaction) throws -> Int {
+        let bytes = try transaction.toCBORData()
+        return bytes.first == 0x84 ? bytes.count - 1 : bytes.count
     }
 
     private func buildFakeWitnessSet() throws -> TransactionWitnessSet {

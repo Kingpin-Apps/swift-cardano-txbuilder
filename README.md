@@ -378,6 +378,24 @@ txBuilder.feeBuffer = 50_000
 txBuilder.executionMemoryBuffer = 0.15
 ```
 
+### Hardware Wallets (CIP-21)
+
+Ledger, Trezor and Keystone sign only transactions written the way
+[CIP-21](https://cips.cardano.org/cip/CIP-0021) sets out. Turn on
+`cip21Compatible` to build one:
+
+```swift
+txBuilder.cip21Compatible = true
+let body = try await txBuilder.build(changeAddress: changeAddress)
+```
+
+The body is written canonically, with no empty collections and every set
+tagged 258, before the fee is worked out, so the fee covers the bytes that
+are signed. A transaction hardware wallets refuse, such as one with a
+certificate they cannot sign or a pool registration that is not alone,
+fails to build and says why. The rules come from `SwiftCardanoCIP21`, in
+[swift-cardano-cips](https://github.com/Kingpin-Apps/swift-cardano-cips).
+
 ### Fee Estimation and Execution Units
 
 The builder automatically handles:

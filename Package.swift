@@ -20,6 +20,7 @@ let package = Package(
         .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", from: "0.8.1"),
         .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.10.0"),
         .package(url: "https://github.com/Kingpin-Apps/swift-nacl.git", .upToNextMinor(from: "1.0.1")),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-cips.git", from: "0.4.0"),
     ],
     targets: [
         .target(
@@ -29,6 +30,8 @@ let package = Package(
                 .product(name: "SwiftCardanoChain", package: "swift-cardano-chain"),
                 .product(name: "SwiftNaCl", package: "swift-nacl"),
                 .product(name: "Clibsodium", package: "swift-nacl"),
+                // CIP-21 alone: the rest of swift-cardano-cips is not linked.
+                .product(name: "SwiftCardanoCIP21", package: "swift-cardano-cips"),
             ]
         ),
         .testTarget(

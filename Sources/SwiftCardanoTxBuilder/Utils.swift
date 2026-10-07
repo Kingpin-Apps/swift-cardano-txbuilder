@@ -286,7 +286,8 @@ public struct FeeBreakdown: Sendable, Equatable {
         public let fee: Double
     }
 
-    /// The transaction's size in bytes.
+    /// The size the ledger charges for, in bytes: the signed transaction
+    /// without its one-byte validity flag.
     public let sizeBytes: UInt64
     public let feePerByte: UInt64
     /// `sizeBytes × feePerByte`.

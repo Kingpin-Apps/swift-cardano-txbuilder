@@ -13,6 +13,9 @@ enum CardanoTxBuilderError: Error, CustomStringConvertible, Equatable {
     case transactionTooLarge(String?)
     case utxoSelectionFailed(String?)
     case valueError(String?)
+    /// Built for hardware wallets (CIP-21), but the transaction does
+    /// something they refuse to sign.
+    case cip21Incompatible(String?)
     
     var description: String {
         switch self {
@@ -38,6 +41,8 @@ enum CardanoTxBuilderError: Error, CustomStringConvertible, Equatable {
                 return message ?? "Invalid transaction."
             case .transactionTooLarge(let message):
                 return message ?? "Transaction too large."
+            case .cip21Incompatible(let message):
+                return message ?? "Hardware wallets cannot sign this transaction (CIP-21)."
         }
     }
 }
