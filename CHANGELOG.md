@@ -1,3 +1,9 @@
+## 1.2.0 (2026-10-07)
+
+### Feat
+
+- build for hardware wallets (CIP-21), and size the fee exactly as the ledger does
+
 ## 1.1.2 (2026-10-04)
 
 ### Fix
