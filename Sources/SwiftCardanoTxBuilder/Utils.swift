@@ -64,6 +64,12 @@ public struct Utils {
         try await referenceScriptFeeTiers(context, scriptsSize: scriptsSize).fee
     }
 
+    /// Conway's reference-script tiers, fixed by the ledger rather than
+    /// set by protocol parameters.
+    static let conwayReferenceScriptTierBytes: Double = 25_600
+    static let conwayReferenceScriptTierMultiplier: Double = 1.2
+    static let conwayMaxReferenceScriptsSize: Int64 = 204_800
+
     /// The reference-script fee, tier by tier.
     ///
     /// Reference-script bytes are charged in tiers of `range` bytes, each tier
@@ -73,12 +79,21 @@ public struct Utils {
     ) async throws -> (tiers: [FeeBreakdown.ReferenceScriptTier], fee: UInt64) {
         let protocolParameters = try await context.protocolParameters()
 
-        guard let maxSize = protocolParameters.maxReferenceScriptsSize,
-            let pricing = protocolParameters.minFeeReferenceScripts,
-            let base = pricing.base, let range = pricing.range, let multiplier = pricing.multiplier
-        else {
+        // Parameters that state only the price per byte, as many providers'
+        // do, take Conway's fixed tiers: 25 KiB, each 1.2 times the last, up
+        // to 200 KiB a transaction. Charging nothing would leave the fee too
+        // small for the node.
+        let base: Double, range: Double, multiplier: Double
+        if let pricing = protocolParameters.minFeeReferenceScripts,
+            let tierBase = pricing.base, let tierRange = pricing.range, let tierMultiplier = pricing.multiplier
+        {
+            (base, range, multiplier) = (tierBase, tierRange, tierMultiplier)
+        } else if let perByte = protocolParameters.minFeeRefScriptCostPerByte {
+            (base, range, multiplier) = (Double(perByte), Self.conwayReferenceScriptTierBytes, Self.conwayReferenceScriptTierMultiplier)
+        } else {
             return ([], 0)
         }
+        let maxSize = protocolParameters.maxReferenceScriptsSize ?? Self.conwayMaxReferenceScriptsSize
         if scriptsSize > maxSize {
             throw CardanoTxBuilderError.valueError(
                 "Reference scripts size: \(scriptsSize) exceeds maximum allowed size (\(maxSize))."
