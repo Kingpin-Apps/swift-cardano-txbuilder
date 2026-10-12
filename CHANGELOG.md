@@ -1,3 +1,9 @@
+## 1.3.1 (2026-10-12)
+
+### Fix
+
+- charge reference scripts when parameters give only the price per byte
+
 ## 1.3.0 (2026-10-12)
 
 ### Feat
