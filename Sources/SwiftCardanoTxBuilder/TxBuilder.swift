@@ -323,6 +323,20 @@ public class TxBuilder: Loggable {
         return self
     }
 
+    /// Add a reference input: a UTxO the transaction reads without spending
+    /// it, such as one holding an oracle's datum. A reference script it
+    /// carries is priced into the fee, as the ledger charges for it.
+    /// - Parameter utxo: The UTxO to read.
+    /// - Returns: Current transaction builder
+    @discardableResult
+    public func addReferenceInput(_ utxo: UTxO) -> TxBuilder {
+        let (inserted, _) = referenceInputs.insert(.utxo(utxo))
+        if inserted, let script = utxo.output.script {
+            _referenceScripts.append(script)
+        }
+        return self
+    }
+
     /// Add a minting script along with its redeemer to this transaction.
     /// - Parameters:
     ///   - script: A plutus script or UTxO containing a script
