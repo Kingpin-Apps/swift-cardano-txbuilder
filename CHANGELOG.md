@@ -1,3 +1,9 @@
+## 1.3.0 (2026-10-12)
+
+### Feat
+
+- add reference inputs read for their data
+
 ## 1.2.0 (2026-10-07)
 
 ### Feat
