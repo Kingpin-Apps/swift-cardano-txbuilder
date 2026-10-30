@@ -1,3 +1,13 @@
+## 2.0.0 (2026-10-30)
+
+### Feat
+
+- build against swift-cardano-core 0.10 and charge fees as the ledger does
+
+### Fix
+
+- charge every Conway registration's deposit and round collateral up
+
 ## 1.3.1 (2026-10-12)
 
 ### Fix
