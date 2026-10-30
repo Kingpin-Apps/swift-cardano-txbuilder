@@ -21,7 +21,7 @@ public extension TxBuilder.Transactions {
         let stakeCredential = StakeCredential(
             credential: .verificationKeyHash(try stakeVerificationKey.hash())
         )
-        let voteDelegationCertificate = VoteDelegate(
+        let voteDelegationCertificate = try VoteDelegate(
             stakeCredential: stakeCredential,
             drep: drep
         )

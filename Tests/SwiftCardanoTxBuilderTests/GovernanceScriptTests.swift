@@ -1,3 +1,4 @@
+import BigInt
 import Foundation
 import SwiftCardanoCore
 import Testing
@@ -26,7 +27,7 @@ struct GovernanceScriptTests {
         let builder = TxBuilder(context: MockChainContext(), utxoSelectors: [selector])
         try builder
             .addInputAddress(.string(sender))
-            .addOutput(try TransactionOutput(from: .list([.string(sender), .uint(500_000)])))
+            .addOutput(try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500_000)])))
         builder.ttl = 123456
         return builder
     }
@@ -70,7 +71,7 @@ struct GovernanceScriptTests {
             try builder.addProposalScript(.script(.plutusV3Script(guardrail)), redeemer: try redeemer())
         }
         let rewardAccount = Data([0xE0] + Array(repeating: 0x11, count: 28))
-        builder.addProposal(deposit: 100_000_000_000, rewardAccount: rewardAccount, govAction: .infoAction(InfoAction()), anchor: try anchor())
+        try builder.addProposal(deposit: 100_000_000_000, rewardAccount: rewardAccount, govAction: .infoAction(InfoAction()), anchor: try anchor())
         try builder.addProposalScript(.script(.plutusV3Script(guardrail)), redeemer: try redeemer())
 
         let redeemers = try redeemerList(builder)
@@ -131,8 +132,13 @@ struct GovernanceScriptTests {
         let size = UInt64(range) * 2 + 10
         let (tiers, fee) = try await Utils.referenceScriptFeeTiers(context, scriptsSize: size)
         #expect(tiers.map(\.bytes) == [UInt64(range), UInt64(range), 10])
-        #expect(tiers[1].pricePerByte == tiers[0].pricePerByte * (pricing.multiplier ?? 1))
-        #expect(fee == UInt64(ceil(tiers.map(\.fee).reduce(0, +))))
+        let base = Rational(try #require(pricing.base))
+        let multiplier = Rational(try #require(pricing.multiplier))
+        #expect(tiers.map(\.pricePerByte) == [base.double, (base * multiplier).double, (base * multiplier * multiplier).double])
+        // The ledger's tierRefScriptFee: the exact sum over the tiers, rounded down once.
+        let stride = Rational(BigInt(range))
+        let exact = base * stride + base * multiplier * stride + base * multiplier * multiplier * Rational(10)
+        #expect(fee == UInt64(exact.floor))
         #expect(fee == (try await Utils.tieredReferenceScriptFee(context, scriptsSize: size)))
     }
 

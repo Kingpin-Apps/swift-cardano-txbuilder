@@ -1,3 +1,4 @@
+import BigInt
 /**
  This module contains algorithms that select UTxOs from a parent list to satisfy some output constraints.
  */
@@ -119,7 +120,7 @@ public class LargestFirstSelector: UTxOSelector {
                         TransactionOutput(
                             address: FakeAddress.address,
                             amount: Value(
-                                coin: Int64(minChangeAmount) - change.coin
+                                coin: BigInt(minChangeAmount) - change.coin
                             )
                         )
                     ],
@@ -376,7 +377,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
                         TransactionOutput(
                             address: FakeAddress.address,
                             amount: Value(
-                                coin: Int64(minChangeAmount) - change.coin
+                                coin: BigInt(minChangeAmount) - change.coin
                             )
                         )
                     ],

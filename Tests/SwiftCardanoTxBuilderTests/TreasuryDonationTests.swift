@@ -1,3 +1,4 @@
+import BigInt
 import Foundation
 import SwiftCardanoChain
 import SwiftCardanoCore
@@ -21,8 +22,8 @@ struct TreasuryDonationTests {
 
         let body = try await builder.build(changeAddress: senderAddress)
         // The mock UTxO the builder picks holds 5 ada.
-        let out = body.outputs.reduce(Int64(0)) { $0 + $1.amount.coin }
-        #expect(out + Int64(body.fee) + 1_000_000 == 5_000_000)
+        let out = body.outputs.reduce(BigInt(0)) { $0 + $1.amount.coin }
+        #expect(out + BigInt(body.fee) + 1_000_000 == 5_000_000)
         #expect(body.treasuryDonation == PositiveCoin(1_000_000))
     }
 }

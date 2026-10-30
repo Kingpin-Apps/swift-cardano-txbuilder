@@ -23,7 +23,7 @@ public extension TxBuilder.Transactions {
         let stakeCredential = StakeCredential(
             credential: .verificationKeyHash(try stakeVerificationKey.hash())
         )
-        let voteRegisterDelegationCertificate = VoteRegisterDelegate(
+        let voteRegisterDelegationCertificate = try VoteRegisterDelegate(
             stakeCredential: stakeCredential,
             drep: drep,
             coin: Coin(protocolParams.dRepDeposit)

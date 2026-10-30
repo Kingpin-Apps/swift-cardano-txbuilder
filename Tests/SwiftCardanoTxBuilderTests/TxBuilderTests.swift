@@ -1,3 +1,4 @@
+import BigInt
 import Testing
 import Foundation
 import Logging
@@ -21,7 +22,7 @@ struct TxBuilderTests {
         
         // Add sender address as input
         try txBuilder.addInputAddress(.string(sender)).addOutput(
-            TransactionOutput(from: .list([.string(sender), .uint(500000)]))
+            TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500000)]))
         )
         
         let txBody = try await txBuilder.build(changeAddress: senderAddress)
@@ -66,7 +67,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
                 
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderWithNoChange() async throws {
@@ -80,7 +81,7 @@ struct TxBuilderTests {
         
         txBuilder.addInputAddress(.address(senderAddress))
         
-        let tx_output = try TransactionOutput(from: .list([.string(sender), .uint(500_000)]))
+        let tx_output = try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500_000)]))
         try txBuilder.addOutput(tx_output)
         
         let txBody = try await txBuilder.build()
@@ -99,12 +100,12 @@ struct TxBuilderTests {
             .uint(1)
         ]))
         let txOut1 = try TransactionOutput(from: .list([
-            .string(sender),
+            .bytes(try Address(from: .string(sender)).toBytes()),
             .list([
                 .uint(6_000_000),
                 .dict([
                     .bytes(Data(repeating: 0x31, count: 28)): .orderedDict([
-                        .string("Token1"): .uint(1), .string("Token2"): .uint(2)
+                        .bytes(Data("Token1".utf8)): .uint(1), .bytes(Data("Token2".utf8)): .uint(2)
                     ])
                 ])
             ])
@@ -114,7 +115,7 @@ struct TxBuilderTests {
         try txBuilder
             .addInput(utxo1)
             .addOutput(
-                TransactionOutput(from: .list([.string(sender), .uint(500000)]))
+                TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500000)]))
             )
         
         let txBody = try await txBuilder.build(changeAddress: senderAddress)
@@ -151,7 +152,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderWithPotentialInputs() async throws {
@@ -178,12 +179,12 @@ struct TxBuilderTests {
         #expect(txBuilder.potentialInputs.count > 1)
         
         let txOut = try TransactionOutput(from: .list([
-            .string(sender),
+            .bytes(try Address(from: .string(sender)).toBytes()),
             .list([
                 .int(5000000),
                 .dict([
                     .bytes(Data(repeating: 0x31, count: 28)): .dict([
-                        .string("Token1"): .uint(1)
+                        .bytes(Data("Token1".utf8)): .uint(1)
                     ])
                 ])
             ])
@@ -273,7 +274,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
         
         #expect(txBody.inputs.count > 0)
         #expect(txBody.outputs.count > 1)
@@ -290,7 +291,7 @@ struct TxBuilderTests {
             .addInputAddress(.address(senderAddress))
             .addOutput(
                 try TransactionOutput(
-                    from: .list([.string(sender), .uint(1_000_000_000)])
+                    from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(1_000_000_000)])
                 )
             )
             .addOutput(
@@ -326,7 +327,7 @@ struct TxBuilderTests {
                 .addInputAddress(.address(senderAddress))
                 .addOutput(
                     try TransactionOutput(
-                        from: .list([.string(sender), .uint(1_000_000_000)])
+                        from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(1_000_000_000)])
                     )
                 )
                 .addOutput(
@@ -361,7 +362,7 @@ struct TxBuilderTests {
             try txBuilder.addOutput(
                 try TransactionOutput(from:
                     .list([
-                        .string(sender),
+                        .bytes(try Address(from: .string(sender)).toBytes()),
                         .uint(10)
                     ])
                 )
@@ -394,7 +395,7 @@ struct TxBuilderTests {
         try txBuilder
             .addInput(utxo1)
             .addOutput(
-                TransactionOutput(from: .list([.string(sender), .uint(2_500_000)]))
+                TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(2_500_000)]))
             )
         
         let txBody = try await txBuilder.build(changeAddress: senderAddress)
@@ -423,7 +424,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
                 
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testSmallUTxOBalanceFail() async throws {
@@ -504,7 +505,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
                 
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderMintMultiAsset() async throws {
@@ -636,7 +637,7 @@ struct TxBuilderTests {
             }
         }
                 
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderBurnMultiAsset() async throws {
@@ -671,12 +672,12 @@ struct TxBuilderTests {
         ]))
         
         let txOut = try TransactionOutput(from: .list([
-            .string(sender),
+            .bytes(try Address(from: .string(sender)).toBytes()),
             .list([
                 .int(2_000_000),
                 .dict([
                     .bytes(policyId.payload): .dict([
-                        .string("Token1"): .int(1)
+                        .bytes(Data("Token1".utf8)): .int(1)
                     ])
                 ])
             ])
@@ -687,7 +688,7 @@ struct TxBuilderTests {
         
         txBuilder.addInputAddress(.string(sender))
         try txBuilder.addOutput(
-            TransactionOutput(from: .list([.string(sender), .uint(3000000)]))
+            TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(3000000)]))
         )
         txBuilder.mint = toBurn
         txBuilder.nativeScripts = [script]
@@ -794,7 +795,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
                 
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxAddChangeSplitNFTsNotEnough() async throws {
@@ -861,7 +862,7 @@ struct TxBuilderTests {
         
         txBuilder.addInputAddress(.string(sender))
         try txBuilder.addOutput(
-            TransactionOutput(from: .list([.string(sender), .uint(8_000_000)]))
+            TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(8_000_000)]))
         )
         txBuilder.mint = mint
         txBuilder.nativeScripts = [script]
@@ -1781,6 +1782,9 @@ struct TxBuilderTests {
         #expect(
             txBody.collateralReturn!.amount + Value(coin: Int64(txBody.totalCollateral!))  == originalUtxos[0].output.amount
         )
+        // The ledger wants collateral × 100 ≥ fee × collateralPercentage.
+        let collateralPercentage = BigInt(try await chainContext.protocolParameters().collateralPercentage)
+        #expect(BigInt(txBody.totalCollateral!) * 100 >= BigInt(txBody.fee) * collateralPercentage)
     }
     
     @Test(arguments: [
@@ -1927,7 +1931,7 @@ struct TxBuilderTests {
                 }
             )
         ])
-        originalUtxos[0].output.amount.coin = try await Int64(
+        originalUtxos[0].output.amount.coin = try await BigInt(
             Utils.minLovelacePostAlonzo(
                 originalUtxos[0].output,
                 chainContext
@@ -2262,7 +2266,7 @@ struct TxBuilderTests {
         try txBuilder
             .addInputAddress(.address(senderAddress))
             .addOutput(
-                try TransactionOutput(from: .list([.string(sender), .uint(500_000)]))
+                try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500_000)]))
             )
 
         let utxos = try await chainContext.utxos(address: senderAddress)
@@ -2302,7 +2306,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testBuildAndSign() async throws {
@@ -2316,7 +2320,7 @@ struct TxBuilderTests {
         let txBuilder1 = TxBuilder(context: chainContext, utxoSelectors: [selector])
         txBuilder1.addInputAddress(.address(senderAddress))
         try txBuilder1.addOutput(
-            try TransactionOutput(from: .list([.string(sender), .uint(500000)]))
+            try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500000)]))
         )
 
         let txBody = try await txBuilder1.build(changeAddress: senderAddress)
@@ -2324,7 +2328,7 @@ struct TxBuilderTests {
         let txBuilder2 = TxBuilder(context: chainContext, utxoSelectors: [selector])
         txBuilder2.addInputAddress(.address(senderAddress))
         try txBuilder2.addOutput(
-            try TransactionOutput(from: .list([.string(sender), .uint(500000)]))
+            try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500000)]))
         )
 
         let tx = try await txBuilder2.buildAndSign(
@@ -2485,7 +2489,7 @@ struct TxBuilderTests {
             .uint(3)
         ]))
         let txOut1 = try TransactionOutput(from: .list([
-            .string(sender),
+            .bytes(try Address(from: .string(sender)).toBytes()),
             .uint(UInt64(inputAmount))
         ]))
         let utxo1 = UTxO(input: txIn1, output: txOut1)
@@ -2493,7 +2497,7 @@ struct TxBuilderTests {
         try txBuilder1
             .addInput(utxo1)
             .addOutput(
-                TransactionOutput(from: .list([.string(sender), .uint(5_000_000)]))
+                TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(5_000_000)]))
             )
         
         let txBody = try await txBuilder1.build()
@@ -2503,7 +2507,7 @@ struct TxBuilderTests {
             .uint(3)
         ]))
         let txOut2 = try TransactionOutput(from: .list([
-            .string(sender),
+            .bytes(try Address(from: .string(sender)).toBytes()),
             .uint(UInt64(inputAmount))
         ]))
         let utxo2 = UTxO(input: txIn2, output: txOut2)
@@ -2511,7 +2515,7 @@ struct TxBuilderTests {
         try txBuilder2
             .addInput(utxo2)
             .addOutput(
-                TransactionOutput(from: .list([.string(sender), .uint(UInt64(inputAmount - Int64(txBody.fee)))]))
+                TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(UInt64(inputAmount - Int64(txBody.fee)))]))
             )
         
         let tx = try await txBuilder2.buildAndSign(
@@ -2544,7 +2548,7 @@ struct TxBuilderTests {
             length: UInt64(try tx.toCBORData().count)
         )
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
         #expect(tx.transactionBody.fee >= expectedFee)
     }
     
@@ -2561,13 +2565,13 @@ struct TxBuilderTests {
         let stakeCredential = StakeCredential(credential: .verificationKeyHash(stakeKeyHash))
         let poolHash = PoolKeyHash(payload: Data(repeating: 0x31, count: 28))
         
-        let stakeRegistration = StakeRegistration(stakeCredential: stakeCredential)
-        let stakeDelegation = StakeDelegation(stakeCredential: stakeCredential, poolKeyHash: poolHash)
+        let stakeRegistration = try StakeRegistration(stakeCredential: stakeCredential)
+        let stakeDelegation = try StakeDelegation(stakeCredential: stakeCredential, poolKeyHash: poolHash)
         
         try txBuilder
             .addInputAddress(.string(sender))
             .addOutput(
-                try TransactionOutput(from: .list([.string(sender), .uint(500_000)]))
+                try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500_000)]))
             )
         
         txBuilder.certificates = [
@@ -2619,7 +2623,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderCertificatesScript() async throws {
@@ -2641,13 +2645,13 @@ struct TxBuilderTests {
         )
         let poolHash = PoolKeyHash(payload: Data(repeating: 0x31, count: 28))
 
-        let stakeRegistration = StakeRegistration(stakeCredential: stakeCredential)
-        let stakeDelegation = StakeDelegation(stakeCredential: stakeCredential, poolKeyHash: poolHash)
+        let stakeRegistration = try StakeRegistration(stakeCredential: stakeCredential)
+        let stakeDelegation = try StakeDelegation(stakeCredential: stakeCredential, poolKeyHash: poolHash)
 
         try txBuilder
             .addInputAddress(.string(sender))
             .addOutput(
-                try TransactionOutput(from: .list([.string(sender), .uint(500_000)]))
+                try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500_000)]))
             )
         
         txBuilder.certificates = [
@@ -2748,13 +2752,13 @@ struct TxBuilderTests {
         )
         let poolHash = PoolKeyHash(payload: Data(repeating: 0x31, count: 28))
 
-        let stakeRegistration = StakeRegistration(stakeCredential: stakeCredential)
-        let stakeDelegation = StakeDelegation(stakeCredential: stakeCredential, poolKeyHash: poolHash)
+        let stakeRegistration = try StakeRegistration(stakeCredential: stakeCredential)
+        let stakeDelegation = try StakeDelegation(stakeCredential: stakeCredential, poolKeyHash: poolHash)
 
         try txBuilder
             .addInputAddress(.string(sender))
             .addOutput(
-                try TransactionOutput(from: .list([.string(sender), .uint(500_000)]))
+                try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500_000)]))
             )
         
         txBuilder.certificates = [
@@ -2808,14 +2812,14 @@ struct TxBuilderTests {
         let txBuilder = TxBuilder(context: chainContext, utxoSelectors: [selector])
         let senderAddress = try Address(from: .string(sender))
         
-        let poolRegistration = PoolRegistration(poolParams: poolParams)
+        let poolRegistration = try PoolRegistration(poolParams: poolParams)
         
         let txIn = try TransactionInput(from: .list([
             .bytes(Data(repeating: 0x32, count: 32)),
             .uint(2)
         ]))
         let txOut = try TransactionOutput(from: .list([
-            .string(sender),
+            .bytes(try Address(from: .string(sender)).toBytes()),
             .uint(505_000_000)
         ]))
         let utxo = UTxO(input: txIn, output: txOut)
@@ -2908,7 +2912,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderWithdrawal() async throws {
@@ -2926,7 +2930,7 @@ struct TxBuilderTests {
 
         txBuilder.addInputAddress(.string(sender))
         try txBuilder.addOutput(
-            try TransactionOutput(from: .list([.string(sender), .uint(500000)]))
+            try TransactionOutput(from: .list([.bytes(try Address(from: .string(sender)).toBytes()), .uint(500000)]))
         )
 
         let withdrawals = Withdrawals([
@@ -2968,7 +2972,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderNoOutput() async throws {
@@ -2983,7 +2987,7 @@ struct TxBuilderTests {
             .uint(3)
         ]))
         let txOut1 = try TransactionOutput(from: .list([
-            .string(sender),
+            .bytes(try Address(from: .string(sender)).toBytes()),
             .uint(UInt64(inputAmount))
         ]))
         let utxo1 = UTxO(input: txIn1, output: txOut1)
@@ -3015,7 +3019,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderMergeChangeToOutput1() async throws {
@@ -3065,7 +3069,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderMergeChangeToOutput2() async throws {
@@ -3132,7 +3136,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxMergeChangeToZeroAmountOutput() async throws {
@@ -3182,7 +3186,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxMergeChangeSmallerThanMinUTxO() async throws {
@@ -3232,7 +3236,7 @@ struct TxBuilderTests {
         
         let txBodyPrimitive = try txBody.toPrimitive()
         
-        #expect(expected == txBodyPrimitive)
+        #expect(try cborHex(expected) == cborHex(txBodyPrimitive))
     }
     
     @Test func testTxBuilderSmallUTxOInput1() async throws {
@@ -3984,6 +3988,6 @@ struct TxBuilderTests {
         let changeAmount = tx.outputs[1]
         #expect(changeAmount.address == vaultAddress)
         #expect(changeAmount.amount.coin  == 40_000_000 + 1_038_710 - 1_326_255 - tx.fee)
-        #expect(changeAmount.amount.multiAsset[tokenPolicyId]![tokenName] == Int64(1_876_083 - 382))
+        #expect(changeAmount.amount.multiAsset[tokenPolicyId]![tokenName] == BigInt(1_876_083 - 382))
     }
 }

@@ -38,7 +38,7 @@ public extension TxBuilder.Transactions {
         let stakeCredential = StakeCredential(
             credential: .verificationKeyHash(try stakeVerificationKey.hash())
         )
-        let unregisterCertificate = Unregister(
+        let unregisterCertificate = try Unregister(
             stakeCredential: stakeCredential,
             coin: Coin(protocolParams.stakeAddressDeposit)
         )

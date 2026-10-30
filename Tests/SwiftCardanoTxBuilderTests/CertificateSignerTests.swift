@@ -25,19 +25,19 @@ struct CertificateSignerTests {
             poolOwners: .list([hash(2), hash(3)]),
             relays: nil, poolMetadata: nil
         )
-        #expect(signers(.poolRegistration(PoolRegistration(poolParams: params))) == [hash(1), hash(2), hash(3)])
+        #expect(try signers(.poolRegistration(PoolRegistration(poolParams: params))) == [hash(1), hash(2), hash(3)])
     }
 
     @Test("Retiring or updating a DRep, and committee key certificates, are signed by their key")
-    func governanceCertificates() {
+    func governanceCertificates() throws {
         let key = CredentialType.verificationKeyHash(hash(5))
-        #expect(signers(.unRegisterDRep(UnregisterDRep(drepCredential: DRepCredential(credential: key), coin: 500_000_000))) == [hash(5)])
-        #expect(signers(.updateDRep(UpdateDRep(drepCredential: DRepCredential(credential: key), anchor: nil))) == [hash(5)])
+        #expect(try signers(.unRegisterDRep(UnregisterDRep(drepCredential: DRepCredential(credential: key), coin: 500_000_000))) == [hash(5)])
+        #expect(try signers(.updateDRep(UpdateDRep(drepCredential: DRepCredential(credential: key), anchor: nil))) == [hash(5)])
         let cold = CommitteeColdCredential(credential: key)
-        #expect(signers(.authCommitteeHot(AuthCommitteeHot(
+        #expect(try signers(.authCommitteeHot(AuthCommitteeHot(
             committeeColdCredential: cold, committeeHotCredential: CommitteeHotCredential(credential: .verificationKeyHash(hash(6)))
         ))) == [hash(5)])
-        #expect(signers(.resignCommitteeCold(ResignCommitteeCold(committeeColdCredential: cold))) == [hash(5)])
+        #expect(try signers(.resignCommitteeCold(ResignCommitteeCold(committeeColdCredential: cold))) == [hash(5)])
     }
 }
 
@@ -53,7 +53,7 @@ struct CertificateFeeSizingTests {
         let builder = TxBuilder(context: MockChainContext(), utxoSelectors: [selector])
         try builder.addInputAddress(.string(sender))
         let stake = CredentialType.verificationKeyHash(VerificationKeyHash(payload: Data(repeating: 0x5A, count: 28)))
-        builder.certificates = [.register(Register(stakeCredential: StakeCredential(credential: stake), coin: 2_000_000))]
+        builder.certificates = [.register(try Register(stakeCredential: StakeCredential(credential: stake), coin: 2_000_000))]
         return builder
     }
 

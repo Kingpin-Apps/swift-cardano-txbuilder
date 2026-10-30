@@ -36,7 +36,7 @@ public extension TxBuilder.Transactions {
         let stakeCredential = StakeCredential(
             credential: .verificationKeyHash(try stakeVerificationKey.hash())
         )
-        let stakeDeregistrationCertificate = StakeDeregistration(
+        let stakeDeregistrationCertificate = try StakeDeregistration(
             stakeCredential: stakeCredential
         )
         

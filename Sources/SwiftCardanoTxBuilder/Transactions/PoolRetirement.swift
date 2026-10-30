@@ -17,7 +17,7 @@ public extension TxBuilder.Transactions {
         signingKeys: [SigningKeyType]? = nil
     ) async throws -> Transaction {
         // 1. Create the certificate
-        let poolRetirementCertificate = PoolRetirement(
+        let poolRetirementCertificate = try PoolRetirement(
             poolKeyHash: poolOperator.poolKeyHash,
             epoch: epoch
         )

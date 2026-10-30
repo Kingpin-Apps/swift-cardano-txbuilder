@@ -257,8 +257,11 @@ struct TieredReferenceScriptFeeTests {
     func testTieredReferenceScriptFee() async throws {
         let context = MockChainContext()
 
+        // 44 lovelace a byte over 80 KiB: 1,126,400 + 1,351,680 + 1,622,016 for
+        // three full tiers and 389,283.84 for the last 5 KiB, 4,489,379.84 in
+        // all. The ledger's tierRefScriptFee rounds that down.
         let result = try await Utils.tieredReferenceScriptFee(context, scriptsSize: 80 * 1024)
-        #expect(result == 4_489_380)
+        #expect(result == 4_489_379)
     }
 
     @Test("Tiered Reference Script Fee Exceeds Max Size")
@@ -275,73 +278,16 @@ struct TieredReferenceScriptFeeTests {
 
     @Test("Tiered Reference Script Fee No Params")
     func testTieredReferenceScriptFeeNoParams() async throws {
-        let context = MockChainContext(
-            protocolParameters: ProtocolParameters(
-                collateralPercentage: 0,
-                coinsPerUtxoWord: 0,
-                committeeMaxTermLength: 0,
-                committeeMinSize: 0,
-                costModels: ProtocolParametersCostModels(
-                    PlutusV1: [],
-                    PlutusV2: [],
-                    PlutusV3: []
-                ),
-                dRepActivity: 0,
-                dRepDeposit: 0,
-                dRepVotingThresholds: DRepVotingThresholds(
-                    committeeNoConfidence: 0,
-                    committeeNormal: 0,
-                    hardForkInitiation: 0,
-                    motionNoConfidence: 0,
-                    ppEconomicGroup: 0,
-                    ppGovGroup: 0,
-                    ppNetworkGroup: 0,
-                    ppTechnicalGroup: 0,
-                    treasuryWithdrawal: 0,
-                    updateToConstitution: 0
-                ),
-                executionUnitPrices: ExecutionUnitPrices(
-                    priceMemory: 0,
-                    priceSteps: 0
-                ),
-                govActionDeposit: 0,
-                govActionLifetime: 0,
-                maxBlockBodySize: 0,
-                maxBlockExecutionUnits: ProtocolParametersExecutionUnits(
-                    memory: 0,
-                    steps: 0
-                ),
-                maxBlockHeaderSize: 0,
-                maxCollateralInputs: 0,
-                maxTxExecutionUnits: ProtocolParametersExecutionUnits(
-                    memory: 0,
-                    steps: 0
-                ),
-                maxTxSize: 0,
-                maxValueSize: 0,
-                minPoolCost: 0,
-                monetaryExpansion: 0,
-                poolPledgeInfluence: 0,
-                poolRetireMaxEpoch: 0,
-                poolVotingThresholds: ProtocolParametersPoolVotingThresholds(
-                    committeeNoConfidence: 0,
-                    committeeNormal: 0,
-                    hardForkInitiation: 0,
-                    motionNoConfidence: 0,
-                    ppSecurityGroup: 0
-                ),
-                protocolVersion: ProtocolParametersProtocolVersion(
-                    major: 0,
-                    minor: 0
-                ),
-                stakeAddressDeposit: 0,
-                stakePoolDeposit: 0,
-                stakePoolTargetNum: 0,
-                treasuryCut: 0,
-                txFeeFixed: 0,
-                txFeePerByte: 0,
-                utxoCostPerByte: 0
-            ))
+        // The mock parameters without any reference-script pricing.
+        let context = MockChainContext()
+        try await context.editProtocolParameters { json in
+            for key in json.keys where key.localizedCaseInsensitiveContains("referencescripts")
+                || key.localizedCaseInsensitiveContains("refscriptcostperbyte") {
+                json.removeValue(forKey: key)
+            }
+        }
+        #expect(context._protocolParameters?.minFeeReferenceScripts == nil)
+        #expect(context._protocolParameters?.minFeeRefScriptCostPerByte == nil)
 
         let result = try await Utils.tieredReferenceScriptFee(context, scriptsSize: 100)
         #expect(result == 0)

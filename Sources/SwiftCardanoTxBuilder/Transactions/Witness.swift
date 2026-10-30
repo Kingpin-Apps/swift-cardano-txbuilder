@@ -14,7 +14,7 @@ public extension TxBuilder.Transactions {
     ) throws -> [VerificationKeyWitness] {
         return try keys.map { key in
             let vkey = try key.toVerificationKeyType()
-            let txBodyHash = transaction.transactionBody.hash()
+            let txBodyHash = try transaction.transactionBody.hash()
             let signature = try key.sign(data: txBodyHash)
             return VerificationKeyWitness(
                 vkey: vkey,

@@ -1,3 +1,4 @@
+import BigInt
 import Testing
 import SwiftCardanoCore
 @testable import SwiftCardanoTxBuilder
@@ -48,15 +49,15 @@ struct PoolRetirementTests {
         // would make the outputs exceed the inputs by the deposit and the ledger
         // would reject the tx with ValueNotConservedUTxO.
         let availableUtxos = try await chainContext.utxos(address: feePaymentAddress)
-        var inputTotal: Int64 = 0
+        var inputTotal = BigInt(0)
         for input in body.inputs.asArray {
             if let utxo = availableUtxos.first(where: { $0.input == input }) {
                 inputTotal += utxo.output.amount.coin
             }
         }
-        let outputTotal = body.outputs.reduce(Int64(0)) { $0 + $1.amount.coin }
+        let outputTotal = body.outputs.reduce(BigInt(0)) { $0 + $1.amount.coin }
         #expect(
-            inputTotal == outputTotal + Int64(body.fee),
+            inputTotal == outputTotal + BigInt(body.fee),
             "Pool retirement must conserve value (no deposit refund): inputs \(inputTotal) != outputs \(outputTotal) + fee \(body.fee)"
         )
     }

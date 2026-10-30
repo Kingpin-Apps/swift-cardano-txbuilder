@@ -18,7 +18,7 @@ public extension TxBuilder.Transactions {
     ) async throws -> Transaction {
         
         // 1. Create the certificate
-        let updateDRepCertificate = UpdateDRep(
+        let updateDRepCertificate = try UpdateDRep(
             drepCredential: drepCredential,
             anchor: anchor
         )

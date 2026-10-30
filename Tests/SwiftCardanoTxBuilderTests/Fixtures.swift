@@ -1,3 +1,4 @@
+import CBORCodable
 import Foundation
 import Testing
 import Network
@@ -41,7 +42,7 @@ final class MockChainContext: ChainContext, @unchecked Sendable {
 
     func genesisParameters() async throws -> SwiftCardanoCore.GenesisParameters {
         return GenesisParameters(
-            activeSlotsCoefficient: Double(1000),
+            activeSlotsCoefficient: UnitInterval(numerator: 1, denominator: 20),
             epochLength: 21600,
             maxKesEvolutions: 90,
             maxLovelaceSupply: 45_000_000_000,
@@ -257,12 +258,12 @@ var poolParams: PoolParams {
                 )
             ),
             .singleHostName(
-                SingleHostName(
+                try! SingleHostName(
                     port: 3001,
                     dnsName: "relay1.example.com"
                 )
             ),
-            .multiHostName(MultiHostName(dnsName: "relay1.example.com"))
+            .multiHostName(try! MultiHostName(dnsName: "relay1.example.com"))
             
         ],
         poolMetadata: try! PoolMetadata(
@@ -347,4 +348,64 @@ func captureStderr(_ block: () async throws -> Void) async throws -> String {
 
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     return String(data: data, encoding: .utf8) ?? ""
+}
+
+/// JSON with every number held as the `Decimal` its text spells, so a test
+/// can edit protocol parameters without their rationals passing through a
+/// `Double`.
+indirect enum TestJSON: Codable {
+    case object([String: TestJSON])
+    case array([TestJSON])
+    case string(String)
+    case number(Decimal)
+    case bool(Bool)
+    case null
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Decimal.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([TestJSON].self) {
+            self = .array(value)
+        } else {
+            self = .object(try container.decode([String: TestJSON].self))
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .object(let value): try container.encode(value)
+        case .array(let value): try container.encode(value)
+        case .string(let value): try container.encode(value)
+        case .number(let value): try container.encode(value)
+        case .bool(let value): try container.encode(value)
+        case .null: try container.encodeNil()
+        }
+    }
+}
+
+extension MockChainContext {
+    /// Replaces the protocol parameters with an edited copy of their JSON.
+    func editProtocolParameters(_ edit: (inout [String: TestJSON]) -> Void) async throws {
+        let params = try await protocolParameters()
+        guard case .object(var json) = try JSONDecoder().decode(TestJSON.self, from: try JSONEncoder().encode(params)) else {
+            throw CardanoTxBuilderError.invalidState("Protocol parameters are not a JSON object")
+        }
+        edit(&json)
+        _protocolParameters = try JSONDecoder().decode(
+            ProtocolParameters.self, from: try JSONEncoder().encode(TestJSON.object(json)))
+    }
+}
+
+/// A primitive's CBOR as hex: two bodies are the same transaction when their
+/// bytes are, whether an amount was spelt `.int` or `.uint`.
+func cborHex(_ primitive: Primitive) throws -> String {
+    try CBOREncoder().encode(primitive).toHex
 }

@@ -15,7 +15,7 @@ public extension TxBuilder.Transactions {
         signingKeys: [SigningKeyType]? = nil
     ) async throws -> Transaction {
         // 1. Create the certificate
-        let poolRegistrationCertificate = PoolRegistration(
+        let poolRegistrationCertificate = try PoolRegistration(
             poolParams: poolParams,
         )
         

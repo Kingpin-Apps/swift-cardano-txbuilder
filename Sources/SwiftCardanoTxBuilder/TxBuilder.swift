@@ -1,3 +1,4 @@
+import BigInt
 import Foundation
 import Logging
 import SwiftCardanoChain
@@ -129,7 +130,7 @@ public class TxBuilder: Loggable {
     private var _fee: Int64 = 0
     private var _datums: [DatumHash: Datum] = [:]
     private var _collateralReturn: TransactionOutput?
-    private var _totalCollateral: Int64?
+    private var _totalCollateral: Coin?
     private var _redeemers: [Redeemer] = []
     private var _inputsToRedeemers: [UTxO: Redeemer] = [:]
     private var _mintingScriptToRedeemers: [(ScriptType, Redeemer?)] = []
@@ -878,15 +879,19 @@ public class TxBuilder: Loggable {
     ///   - govAction: The governance action being proposed
     ///   - anchor: Metadata about the proposal
     /// - Returns: Current transaction builder
+    /// - Throws: When the deposit is negative or the reward account is not one.
     @discardableResult
     public func addProposal(
         deposit: Int,
         rewardAccount: Data,
         govAction: GovAction,
         anchor: Anchor
-    ) -> TxBuilder {
-        let procedure = ProposalProcedure(
-            deposit: Coin(deposit),
+    ) throws -> TxBuilder {
+        guard let depositCoin = Coin(exactly: deposit) else {
+            throw CardanoTxBuilderError.invalidInput("A proposal deposit of \(deposit) is negative")
+        }
+        let procedure = try ProposalProcedure(
+            deposit: depositCoin,
             rewardAccount: rewardAccount,
             govAction: govAction,
             anchor: anchor
@@ -978,7 +983,7 @@ public class TxBuilder: Loggable {
 
             if let withdrawals = withdrawals {
                 for withdrawal in withdrawals.data.values {
-                    selectedAmount.coin += Int64(withdrawal)
+                    selectedAmount.coin += BigInt(withdrawal)
                 }
             }
 
@@ -995,7 +1000,7 @@ public class TxBuilder: Loggable {
             selectedAmount.coin -= try await getTotalKeyDeposit()
             selectedAmount.coin -= getTotalProposalDeposit()
             // A treasury donation leaves the inputs like a deposit does.
-            selectedAmount.coin -= Int64(donation ?? 0)
+            selectedAmount.coin -= BigInt(donation ?? 0)
 
             var requestedAmount = Value()
             for output in outputs {
@@ -1016,7 +1021,7 @@ public class TxBuilder: Loggable {
             }
 
             // Include min fees associated as part of requested amount
-            await requestedAmount.coin += try estimateFee()
+            requestedAmount.coin += BigInt(try await estimateFee())
 
             // Trim off assets that are not requested because they will be returned as changes eventually
             var trimmedSelectedAmount = Value(coin: selectedAmount.coin)
@@ -1048,7 +1053,7 @@ public class TxBuilder: Loggable {
                     )
                     unfulfilledAmount.coin = max(
                         0,
-                        unfulfilledAmount.coin + Int64(minLovelace)
+                        unfulfilledAmount.coin + BigInt(minLovelace)
                     )
                 }
             } else {
@@ -1353,13 +1358,13 @@ public class TxBuilder: Loggable {
 
         if let withdrawals = withdrawals {
             for withdrawal in withdrawals.data.values {
-                provided.coin += Int64(withdrawal)
+                provided.coin += BigInt(withdrawal)
             }
         }
 
         provided.coin -= try await getTotalKeyDeposit()
         provided.coin -= getTotalProposalDeposit()
-        provided.coin -= Int64(donation ?? 0)
+        provided.coin -= BigInt(donation ?? 0)
         // Deregistration / retirement certs return their deposit to the wallet.
         provided.coin += try await getTotalKeyRefund()
 
@@ -1443,7 +1448,7 @@ public class TxBuilder: Loggable {
                         coin: 0,
                         multiAsset: multiAsset
                     )
-                    changeValue.coin = Int64(
+                    changeValue.coin = BigInt(
                         try await Utils.minLovelacePostAlonzo(
                             TransactionOutput(
                                 address: address,
@@ -1466,9 +1471,9 @@ public class TxBuilder: Loggable {
         return changeOutputs
     }
 
-    private func getTotalKeyDeposit() async throws -> Int64 {
+    private func getTotalKeyDeposit() async throws -> BigInt {
         var stakeRegistrationCerts = Set<StakeCredential>()
-        var stakeRegistrationCertsWithExplicitDeposit = Set<Int64>()
+        var stakeRegistrationCertsWithExplicitDeposit = Set<BigInt>()
         var stakePoolRegistrationCerts = Set<PoolKeyHash>()
 
         let protocolParameters = try await context.protocolParameters()
@@ -1481,15 +1486,15 @@ public class TxBuilder: Loggable {
                             StakeCredential(credential: reg.stakeCredential.credential)
                         )
                     case .registerDRep(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
                     case .register(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
                     case .stakeRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
                     case .voteRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
                     case .stakeVoteRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(Int64(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
                     case .poolRegistration(let poolReg):
                         if initialStakePoolRegistration {
                             stakePoolRegistrationCerts.insert(poolReg.poolParams.poolOperator)
@@ -1501,10 +1506,10 @@ public class TxBuilder: Loggable {
         }
 
         let stakeRegistrationDeposit =
-            protocolParameters.stakeAddressDeposit * Int64(stakeRegistrationCerts.count)
+            BigInt(protocolParameters.stakeAddressDeposit) * BigInt(stakeRegistrationCerts.count)
             + stakeRegistrationCertsWithExplicitDeposit.reduce(0, +)
         let stakePoolRegistrationDeposit =
-            protocolParameters.stakePoolDeposit * Int64(stakePoolRegistrationCerts.count)
+            BigInt(protocolParameters.stakePoolDeposit) * BigInt(stakePoolRegistrationCerts.count)
 
         return stakeRegistrationDeposit + stakePoolRegistrationDeposit
     }
@@ -1514,18 +1519,18 @@ public class TxBuilder: Loggable {
     /// computing change, otherwise the transaction is short by the refund amount
     /// (ValueNotConservedUTxO). Intentionally NOT applied during coin selection,
     /// so the selector still picks at least one input to fund the fee.
-    private func getTotalKeyRefund() async throws -> Int64 {
+    private func getTotalKeyRefund() async throws -> BigInt {
         guard let certificates = certificates else { return 0 }
         let protocolParameters = try await context.protocolParameters()
-        var refundTotal: Int64 = 0
+        var refundTotal = BigInt(0)
         for cert in certificates {
             switch cert {
                 case .unregister(let unreg):
-                    refundTotal += Int64(unreg.coin)
+                    refundTotal += BigInt(unreg.coin)
                 case .unRegisterDRep(let unreg):
-                    refundTotal += Int64(unreg.coin)
+                    refundTotal += BigInt(unreg.coin)
                 case .stakeDeregistration:
-                    refundTotal += protocolParameters.stakeAddressDeposit
+                    refundTotal += BigInt(protocolParameters.stakeAddressDeposit)
                 // NOTE: pool retirement does NOT refund the stake-pool deposit in the
                 // retirement-certificate transaction — the ledger returns it to the
                 // pool's reward account at the start of the retirement epoch. Crediting
@@ -1538,9 +1543,9 @@ public class TxBuilder: Loggable {
         return refundTotal
     }
 
-    private func getTotalProposalDeposit() -> Int64 {
+    private func getTotalProposalDeposit() -> BigInt {
         guard let proposalProcedures = proposalProcedures else { return 0 }
-        return Int64(proposalProcedures.elements.reduce(0) { $0 + $1.deposit })
+        return proposalProcedures.elements.reduce(BigInt(0)) { $0 + BigInt($1.deposit) }
     }
 
     private func addingAssetMakeOutputOverflow(
@@ -1548,7 +1553,7 @@ public class TxBuilder: Loggable {
         currentAssets: Asset,
         policyId: ScriptHash,
         addAssetName: AssetName,
-        addAssetVal: Int64,
+        addAssetVal: BigInt,
         maxValSize: Int
     ) async throws -> Bool {
         var attemptAssets = currentAssets
@@ -1564,7 +1569,7 @@ public class TxBuilder: Loggable {
             TransactionOutput(address: output.address, amount: attemptAmount),
             context
         )
-        attemptAmount.coin = Int64(requiredLovelace)
+        attemptAmount.coin = BigInt(requiredLovelace)
 
         return try attemptAmount.toCBORData().count > maxValSize
     }
@@ -1628,7 +1633,7 @@ public class TxBuilder: Loggable {
                     TransactionOutput(address: address, amount: updatedAmount),
                     context
                 )
-                updatedAmount.coin = Int64(requiredLovelace)
+                updatedAmount.coin = BigInt(requiredLovelace)
 
                 if try updatedAmount.toCBORData().count > maxValSize {
                     output.amount = oldAmount
@@ -1751,7 +1756,7 @@ public class TxBuilder: Loggable {
             requiredSigners: requiredSigners == nil || requiredSigners!.isEmpty
             ? nil : .nonEmptyOrderedSet(NonEmptyOrderedSet(requiredSigners!)),
             collateralReturn: _collateralReturn,
-            totalCollateral: _totalCollateral == nil ? nil : Coin(_totalCollateral!),
+            totalCollateral: _totalCollateral,
             referenceInputs: referenceInputs.isEmpty
                 ? nil
             : .nonEmptyOrderedSet(NonEmptyOrderedSet<TransactionInput>(
@@ -2216,11 +2221,11 @@ public class TxBuilder: Loggable {
         let protocolParameters = try await context.protocolParameters()
 
         let collateralAmount =
-            Int64(
+            BigInt(
                 try await Utils.maxTxFee(
                     context,
                     refScriptSize: UInt64(refScriptSize())
-                )) * protocolParameters.collateralPercentage / 100
+                )) * BigInt(protocolParameters.collateralPercentage) / 100
 
         if collaterals.isEmpty {
             var tmpVal = Value()
@@ -2331,7 +2336,7 @@ public class TxBuilder: Loggable {
             address: collateralReturnAddress,
             amount: totalInput - Value(coin: collateralAmount)
         )
-        _totalCollateral = collateralAmount
+        _totalCollateral = try collateralAmount.coin("Total collateral")
     }
 
     private func updateExecutionUnits(

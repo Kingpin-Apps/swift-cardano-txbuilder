@@ -23,8 +23,8 @@ struct CIP21BuildTests {
         return builder
     }
 
-    func registration() -> Certificate {
-        .register(Register(stakeCredential: StakeCredential(credential: .verificationKeyHash(hash(0x5A))), coin: 2_000_000))
+    func registration() throws -> Certificate {
+        .register(try Register(stakeCredential: StakeCredential(credential: .verificationKeyHash(hash(0x5A))), coin: 2_000_000))
     }
 
     /// The transaction `builder` built, signed by `signers` placeholder keys
@@ -85,7 +85,7 @@ struct CIP21BuildTests {
 
     @Test("A certificate hardware wallets refuse fails the build, and builds without the flag")
     func refused() async throws {
-        let certificate = Certificate.stakeRegisterDelegate(StakeRegisterDelegate(
+        let certificate = Certificate.stakeRegisterDelegate(try StakeRegisterDelegate(
             stakeCredential: StakeCredential(credential: .verificationKeyHash(hash(0x5A))),
             poolKeyHash: PoolKeyHash(payload: Data(repeating: 0xAB, count: 28)),
             coin: 2_000_000

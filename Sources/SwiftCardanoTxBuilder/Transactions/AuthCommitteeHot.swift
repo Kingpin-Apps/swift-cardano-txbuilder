@@ -18,7 +18,7 @@ public extension TxBuilder.Transactions {
     ) async throws -> Transaction {
         
         // 1. Create the certificate
-        let authCommitteeHotCertificate = AuthCommitteeHot(
+        let authCommitteeHotCertificate = try AuthCommitteeHot(
             committeeColdCredential: committeeColdCredential,
             committeeHotCredential: committeeHotCredential
         )

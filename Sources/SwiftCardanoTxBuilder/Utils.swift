@@ -1,3 +1,4 @@
+import BigInt
 import Foundation
 import SwiftCardanoChain
 import SwiftCardanoCore
@@ -65,15 +66,19 @@ public struct Utils {
     }
 
     /// Conway's reference-script tiers, fixed by the ledger rather than
-    /// set by protocol parameters.
-    static let conwayReferenceScriptTierBytes: Double = 25_600
-    static let conwayReferenceScriptTierMultiplier: Double = 1.2
+    /// set by protocol parameters: a stride of 25 KiB, each tier 6/5 the
+    /// price of the last.
+    static let conwayReferenceScriptTierBytes: UInt32 = 25_600
+    static let conwayReferenceScriptTierMultiplier = NonNegativeInterval(numerator: 6, denominator: 5)
     static let conwayMaxReferenceScriptsSize: Int64 = 204_800
 
     /// The reference-script fee, tier by tier.
     ///
     /// Reference-script bytes are charged in tiers of `range` bytes, each tier
-    /// at `multiplier` times the price of the one before.
+    /// at `multiplier` times the price of the one before. The fee is the
+    /// ledger's `tierRefScriptFee`: the exact rational sum over every tier,
+    /// rounded down once. Each tier's `pricePerByte` and `fee` are that
+    /// tier's exact amounts as a `Double`, for display.
     public static func referenceScriptFeeTiers(
         _ context: any ChainContext, scriptsSize: UInt64
     ) async throws -> (tiers: [FeeBreakdown.ReferenceScriptTier], fee: UInt64) {
@@ -83,15 +88,19 @@ public struct Utils {
         // do, take Conway's fixed tiers: 25 KiB, each 1.2 times the last, up
         // to 200 KiB a transaction. Charging nothing would leave the fee too
         // small for the node.
-        let base: Double, range: Double, multiplier: Double
+        let base: NonNegativeInterval, range: UInt32, multiplier: NonNegativeInterval
         if let pricing = protocolParameters.minFeeReferenceScripts,
             let tierBase = pricing.base, let tierRange = pricing.range, let tierMultiplier = pricing.multiplier
         {
             (base, range, multiplier) = (tierBase, tierRange, tierMultiplier)
         } else if let perByte = protocolParameters.minFeeRefScriptCostPerByte {
-            (base, range, multiplier) = (Double(perByte), Self.conwayReferenceScriptTierBytes, Self.conwayReferenceScriptTierMultiplier)
+            (base, range, multiplier) = (perByte, Self.conwayReferenceScriptTierBytes, Self.conwayReferenceScriptTierMultiplier)
         } else {
             return ([], 0)
+        }
+        guard range > 0, multiplier.numerator > 0, multiplier.denominator > 0, base.denominator > 0 else {
+            throw CardanoTxBuilderError.valueError(
+                "Reference-script pricing needs a positive stride and multiplier: range \(range), multiplier \(multiplier.numerator)/\(multiplier.denominator).")
         }
         let maxSize = protocolParameters.maxReferenceScriptsSize ?? Self.conwayMaxReferenceScriptsSize
         if scriptsSize > maxSize {
@@ -101,21 +110,24 @@ public struct Utils {
         }
 
         var tiers: [FeeBreakdown.ReferenceScriptTier] = []
-        var total: Double = 0.0
+        var total = Rational(0)
         if scriptsSize > 0 {
-            var price = base
-            let r = ceil(range)
+            var price = Rational(base)
+            let step = Rational(multiplier)
+            let stride = UInt64(range)
             var remainingSize = scriptsSize
-            while remainingSize > UInt64(r) {
-                tiers.append(.init(bytes: UInt64(r), pricePerByte: price, fee: price * r))
-                total += price * r
-                remainingSize = remainingSize - UInt64(r)
-                price = price * multiplier
+            while remainingSize > stride {
+                let fee = price * Rational(BigInt(stride))
+                tiers.append(.init(bytes: stride, pricePerByte: price.double, fee: fee.double))
+                total = total + fee
+                remainingSize -= stride
+                price = price * step
             }
-            tiers.append(.init(bytes: remainingSize, pricePerByte: price, fee: price * Double(remainingSize)))
-            total += price * Double(remainingSize)
+            let fee = price * Rational(BigInt(remainingSize))
+            tiers.append(.init(bytes: remainingSize, pricePerByte: price.double, fee: fee.double))
+            total = total + fee
         }
-        return (tiers, UInt64(ceil(total)))
+        return (tiers, try total.floor.coin("Reference-script fee"))
     }
 
     /// Calculate the transaction fee based on the length of a transaction's CBOR bytes and script execution.
@@ -140,7 +152,7 @@ public struct Utils {
     }
 
     /// The fee ``calculateFee(_:length:execSteps:maxMemUnit:refScriptSize:)``
-    /// computes, item by item.
+    /// computes, item by item, as the ledger's `getConwayMinFeeTx` does.
     public static func feeBreakdown(
         _ context: any ChainContext,
         length: UInt64,
@@ -149,16 +161,22 @@ public struct Utils {
         refScriptSize: UInt64 = 0
     ) async throws -> FeeBreakdown {
         let protocolParameters = try await context.protocolParameters()
+        let prices = protocolParameters.executionUnitPrices
 
-        let sizeFee = UInt64(ceil(Double(length) * Double(protocolParameters.txFeePerByte)))
-        let fixedFee = UInt64(ceil(Double(protocolParameters.txFeeFixed)))
-        let stepsFee = UInt64(ceil(Double(execSteps) * Double(protocolParameters.executionUnitPrices.priceSteps)))
-        let memoryFee = UInt64(ceil(Double(maxMemUnit) * Double(protocolParameters.executionUnitPrices.priceMemory)))
+        let (sizeFee, sizeOverflow) = length.multipliedReportingOverflow(by: protocolParameters.txFeePerByte)
+        guard !sizeOverflow else {
+            throw CardanoTxBuilderError.valueError("Size fee of \(length) bytes overflows")
+        }
+        let stepsCost = Rational(prices.priceSteps) * Rational(BigInt(execSteps))
+        let memoryCost = Rational(prices.priceMemory) * Rational(BigInt(maxMemUnit))
         let (tiers, referenceScriptFee) = try await referenceScriptFeeTiers(context, scriptsSize: refScriptSize)
 
         return FeeBreakdown(
-            sizeBytes: length, feePerByte: UInt64(protocolParameters.txFeePerByte), sizeFee: sizeFee,
-            fixedFee: fixedFee, steps: execSteps, stepsFee: stepsFee, memory: maxMemUnit, memoryFee: memoryFee,
+            sizeBytes: length, feePerByte: protocolParameters.txFeePerByte, sizeFee: sizeFee,
+            fixedFee: protocolParameters.txFeeFixed,
+            steps: execSteps, stepsFee: try stepsCost.ceiling.coin("Steps fee"),
+            memory: maxMemUnit, memoryFee: try memoryCost.ceiling.coin("Memory fee"),
+            executionFee: try (stepsCost + memoryCost).ceiling.coin("Script execution fee"),
             referenceScriptBytes: refScriptSize, referenceScriptTiers: tiers, referenceScriptFee: referenceScriptFee
         )
     }
@@ -309,12 +327,16 @@ public struct FeeBreakdown: Sendable, Equatable {
     public let sizeFee: UInt64
     /// The fixed part of every fee.
     public let fixedFee: UInt64
-    /// Plutus execution steps, and what they cost.
+    /// Plutus execution steps, and what they cost on their own, rounded up.
     public let steps: UInt64
     public let stepsFee: UInt64
-    /// Plutus execution memory, and what it costs.
+    /// Plutus execution memory, and what it costs on their own, rounded up.
     public let memory: UInt64
     public let memoryFee: UInt64
+    /// The script-execution part, as the ledger's `txscriptfee` charges it:
+    /// the exact cost of steps plus memory, rounded up once. It can be one
+    /// lovelace less than `stepsFee + memoryFee`, which are rounded apart.
+    public let executionFee: UInt64
     /// Bytes of reference scripts the transaction uses, and their tiered cost.
     public let referenceScriptBytes: UInt64
     public let referenceScriptTiers: [ReferenceScriptTier]
@@ -322,9 +344,54 @@ public struct FeeBreakdown: Sendable, Equatable {
     /// A fixed amount added on top, such as ``TxBuilder/feeBuffer``.
     public var buffer: UInt64 = 0
 
-    /// The script-execution part: steps plus memory.
-    public var executionFee: UInt64 { stepsFee + memoryFee }
-
     /// The whole fee.
     public var total: UInt64 { sizeFee + fixedFee + executionFee + referenceScriptFee + buffer }
+}
+
+/// An exact non-negative fraction, for the ledger's fee arithmetic.
+struct Rational {
+    let numerator: BigInt
+    let denominator: BigInt
+
+    init(_ numerator: BigInt, _ denominator: BigInt = 1) {
+        let divisor = numerator.greatestCommonDivisor(with: denominator)
+        let d = divisor == 0 ? BigInt(1) : divisor
+        self.numerator = numerator / d
+        self.denominator = denominator / d
+    }
+
+    init(_ interval: NonNegativeInterval) {
+        self.init(BigInt(interval.numerator), BigInt(interval.denominator))
+    }
+
+    static func + (lhs: Rational, rhs: Rational) -> Rational {
+        Rational(lhs.numerator * rhs.denominator + rhs.numerator * lhs.denominator, lhs.denominator * rhs.denominator)
+    }
+
+    static func * (lhs: Rational, rhs: Rational) -> Rational {
+        Rational(lhs.numerator * rhs.numerator, lhs.denominator * rhs.denominator)
+    }
+
+    /// Rounded down; the value is never negative.
+    var floor: BigInt { numerator / denominator }
+
+    /// Rounded up; the value is never negative.
+    var ceiling: BigInt { (numerator + denominator - 1) / denominator }
+
+    /// The nearest `Double`, for display only.
+    var double: Double {
+        let whole = numerator / denominator
+        let rest = numerator - whole * denominator
+        return Double(whole) + Double(rest) / Double(denominator)
+    }
+}
+
+extension BigInt {
+    /// The value as lovelace, or an error naming `what` when it overflows.
+    func coin(_ what: String) throws -> UInt64 {
+        guard let coin = UInt64(exactly: self) else {
+            throw CardanoTxBuilderError.valueError("\(what) of \(self) lovelace overflows")
+        }
+        return coin
+    }
 }

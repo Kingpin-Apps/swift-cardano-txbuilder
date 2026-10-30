@@ -51,19 +51,20 @@ struct ReferenceInputTests {
     @Test("Parameters stating only the price per byte are charged in Conway's tiers")
     func perByteOnly() async throws {
         let context = MockChainContext()
-        let params = try await context.protocolParameters()
-        var json = try #require(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(params)) as? [String: Any])
-        let tiered = json.keys.filter { $0.localizedCaseInsensitiveContains("referencescripts") }
+        var tiered: [String] = []
+        try await context.editProtocolParameters { json in
+            tiered = json.keys.filter { $0.localizedCaseInsensitiveContains("referencescripts") }
+            for key in tiered { json.removeValue(forKey: key) }
+            json[json.keys.first { $0.localizedCaseInsensitiveContains("refscriptcostperbyte") } ?? "minFeeRefScriptCostPerByte"] = .number(15)
+        }
         #expect(!tiered.isEmpty)
-        for key in tiered { json.removeValue(forKey: key) }
-        json[json.keys.first { $0.localizedCaseInsensitiveContains("refscriptcostperbyte") } ?? "minFeeRefScriptCostPerByte"] = 15
-        context._protocolParameters = try JSONDecoder().decode(ProtocolParameters.self, from: try JSONSerialization.data(withJSONObject: json))
         #expect(context._protocolParameters?.minFeeReferenceScripts == nil)
 
         let size: UInt64 = 25_600 + 1_000
         let (tiers, fee) = try await Utils.referenceScriptFeeTiers(context, scriptsSize: size)
         #expect(tiers.map(\.bytes) == [25_600, 1_000])
         #expect(tiers.map(\.pricePerByte) == [15, 15 * 1.2])
-        #expect(fee == UInt64(ceil(25_600 * 15 + 1_000 * 15 * 1.2)))
+        // 15 lovelace a byte, then 15 × 6/5 = 18: whole lovelace either way.
+        #expect(fee == 25_600 * 15 + 1_000 * 18)
     }
 }

@@ -20,7 +20,7 @@ public extension TxBuilder.Transactions {
         let protocolParams = try await self.txBuilder.context.protocolParameters()
         
         // 1. Create the certificate
-        let registerDRepCertificate = RegisterDRep(
+        let registerDRepCertificate = try RegisterDRep(
             drepCredential: drepCredential,
             coin: Coin(protocolParams.stakeAddressDeposit),
             anchor: anchor

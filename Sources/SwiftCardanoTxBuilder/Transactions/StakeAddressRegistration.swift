@@ -41,7 +41,7 @@ public extension TxBuilder.Transactions {
         let stakeCredential = StakeCredential(
             credential: .verificationKeyHash(try stakeVerificationKey.hash())
         )
-        let stakeRegistrationCertificate = StakeRegistration(
+        let stakeRegistrationCertificate = try StakeRegistration(
             stakeCredential: stakeCredential
         )
         

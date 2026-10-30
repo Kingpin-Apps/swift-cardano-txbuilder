@@ -18,7 +18,7 @@ public extension TxBuilder.Transactions {
     ) async throws -> Transaction {
         
         // 1. Create the certificate
-        let resignCommitteeColdCertificate = ResignCommitteeCold(
+        let resignCommitteeColdCertificate = try ResignCommitteeCold(
             committeeColdCredential: committeeColdCredential,
             anchor: anchor
         )
