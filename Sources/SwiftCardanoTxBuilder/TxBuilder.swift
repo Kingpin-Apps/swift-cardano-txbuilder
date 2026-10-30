@@ -1471,9 +1471,13 @@ public class TxBuilder: Loggable {
         return changeOutputs
     }
 
+    /// The deposits the certificates take: the protocol deposit once for each
+    /// credential a legacy registration names and each new pool, and every
+    /// Conway registration's own stated deposit — each one counted, even when
+    /// two state the same amount.
     private func getTotalKeyDeposit() async throws -> BigInt {
         var stakeRegistrationCerts = Set<StakeCredential>()
-        var stakeRegistrationCertsWithExplicitDeposit = Set<BigInt>()
+        var stakeRegistrationCertsWithExplicitDeposit: [BigInt] = []
         var stakePoolRegistrationCerts = Set<PoolKeyHash>()
 
         let protocolParameters = try await context.protocolParameters()
@@ -1486,15 +1490,15 @@ public class TxBuilder: Loggable {
                             StakeCredential(credential: reg.stakeCredential.credential)
                         )
                     case .registerDRep(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.append(BigInt(reg.coin))
                     case .register(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.append(BigInt(reg.coin))
                     case .stakeRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.append(BigInt(reg.coin))
                     case .voteRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.append(BigInt(reg.coin))
                     case .stakeVoteRegisterDelegate(let reg):
-                        stakeRegistrationCertsWithExplicitDeposit.insert(BigInt(reg.coin))
+                        stakeRegistrationCertsWithExplicitDeposit.append(BigInt(reg.coin))
                     case .poolRegistration(let poolReg):
                         if initialStakePoolRegistration {
                             stakePoolRegistrationCerts.insert(poolReg.poolParams.poolOperator)
@@ -2220,12 +2224,14 @@ public class TxBuilder: Loggable {
 
         let protocolParameters = try await context.protocolParameters()
 
+        // The ledger wants collateral × 100 ≥ fee × collateralPercentage, so
+        // the amount is rounded up.
         let collateralAmount =
-            BigInt(
+            (BigInt(
                 try await Utils.maxTxFee(
                     context,
                     refScriptSize: UInt64(refScriptSize())
-                )) * BigInt(protocolParameters.collateralPercentage) / 100
+                )) * BigInt(protocolParameters.collateralPercentage) + 99) / 100
 
         if collaterals.isEmpty {
             var tmpVal = Value()
