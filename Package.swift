@@ -17,10 +17,10 @@ let package = Package(
             targets: ["SwiftCardanoTxBuilder"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", from: "0.10.0"),
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.14.0"),
-        .package(url: "https://github.com/Kingpin-Apps/swift-nacl.git", .upToNextMinor(from: "1.0.1")),
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-cips.git", from: "0.4.1"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", from: "0.10.2"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.16.2"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-nacl.git", .upToNextMinor(from: "1.1.0")),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-cips.git", from: "0.4.2"),
         .package(url: "https://github.com/attaswift/BigInt.git", "5.7.0"..<"7.0.0"),
     ],
     targets: [
