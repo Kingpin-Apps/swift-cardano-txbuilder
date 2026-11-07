@@ -18,7 +18,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/Kingpin-Apps/swift-cardano-core.git", from: "0.11.0"),
-        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.16.3"),
+        .package(url: "https://github.com/Kingpin-Apps/swift-cardano-chain.git", from: "0.17.0"),
         .package(url: "https://github.com/Kingpin-Apps/swift-nacl.git", .upToNextMinor(from: "2.0.0")),
         .package(url: "https://github.com/Kingpin-Apps/swift-cardano-cips.git", from: "0.4.3"),
         .package(url: "https://github.com/attaswift/BigInt.git", "5.7.0"..<"7.0.0"),

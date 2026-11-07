@@ -1,5 +1,5 @@
 {
-  "originHash" : "e2eae942a87c1c43a8439fc65ce3c88109f37f1ffba7af6731b5479fe221f43d",
+  "originHash" : "06fd07b1c22a531b216f82d55c6a5b39db40e07758ffa07fd4090dcaad0e7f8a",
   "pins" : [
     {
       "identity" : "base32",
@@ -150,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Kingpin-Apps/swift-cardano-chain.git",
       "state" : {
-        "revision" : "78c4fc886b5a4c0de089156e8f1024ccb3c95681",
-        "version" : "0.16.3"
+        "revision" : "1c3e0b53404f504a3849ede96a8d85ba24974937",
+        "version" : "0.17.0"
       }
     },
     {
