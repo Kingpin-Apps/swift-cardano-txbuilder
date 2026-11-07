@@ -1,3 +1,9 @@
+## 2.0.4 (2026-11-07)
+
+### Fix
+
+- always declare total_collateral when a transaction has collateral
+
 ## 2.0.3 (2026-11-07)
 
 ## 2.0.2 (2026-11-07)
