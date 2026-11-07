@@ -2320,7 +2320,13 @@ public class TxBuilder: Loggable {
         let returnAmount = totalInput - Value(coin: collateralAmount)
 
         if try shouldAddCollateralReturn(returnAmount) == false {
-            return  // No need to return collateral if the remaining amount is too small
+            // The remainder is too small to return, so the whole collateral is at stake.
+            // Declare it anyway: without total_collateral the ledger forfeits the inputs at
+            // their real value, so a provider that under-reports them could take more than
+            // this builder saw. With the field set, a misreported amount fails validation.
+            _collateralReturn = nil
+            _totalCollateral = try totalInput.coin.coin("Total collateral")
+            return
         }
 
         let minLovelaceVal = try await Utils.minLovelacePostAlonzo(

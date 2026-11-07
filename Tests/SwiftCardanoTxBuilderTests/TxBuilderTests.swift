@@ -1877,7 +1877,15 @@ struct TxBuilderTests {
         let txBody = try await txBuilder.build(changeAddress: receiver)
 
         #expect((txBody.collateralReturn != nil) == testInput.2)
-        #expect((txBody.totalCollateral != nil) == testInput.2)
+        // total_collateral is always declared, so the ledger checks the real collateral value.
+        let totalCollateral = try #require(txBody.totalCollateral)
+        if !testInput.2 {
+            // No return output: the whole collateral input is declared.
+            #expect(Int64(totalCollateral) == testInput.0.coin)
+        }
+        // The ledger wants collateral × 100 ≥ fee × collateralPercentage.
+        let collateralPercentage = BigInt(try await chainContext.protocolParameters().collateralPercentage)
+        #expect(BigInt(totalCollateral) * 100 >= BigInt(txBody.fee) * collateralPercentage)
     }
     
     @Test func testCollateralReturnMinReturnAmount() async throws {
