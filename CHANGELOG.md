@@ -1,3 +1,12 @@
+## 2.0.5 (2026-11-07)
+
+### Fix
+
+- cap fees, check provider values, price spent-input reference scripts and validate change and collateral
+- check reward balances before summing them in withdrawRewards
+- make coin selection iterative and overflow-safe
+- bound reference-script tiers and check fee and min-ADA arithmetic
+
 ## 2.0.4 (2026-11-07)
 
 ### Fix
