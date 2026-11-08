@@ -71,6 +71,9 @@ public struct Utils {
     static let conwayReferenceScriptTierBytes: UInt32 = 25_600
     static let conwayReferenceScriptTierMultiplier = NonNegativeInterval(numerator: 6, denominator: 5)
     static let conwayMaxReferenceScriptsSize: Int64 = 204_800
+    /// The most reference-script tiers a fee may span. Conway's ledger
+    /// constants give at most 8.
+    static let maxReferenceScriptTiers: UInt64 = 64
 
     /// The reference-script fee, tier by tier.
     ///
@@ -107,6 +110,14 @@ public struct Utils {
             throw CardanoTxBuilderError.valueError(
                 "Reference scripts size: \(scriptsSize) exceeds maximum allowed size (\(maxSize))."
             )
+        }
+
+        // Conway has at most 8 tiers. A provider stride far below the ledger's
+        // would make this exact-rational loop run once per byte, so refuse it.
+        let tierCount = scriptsSize == 0 ? 0 : (scriptsSize - 1) / UInt64(range) + 1
+        guard tierCount <= Self.maxReferenceScriptTiers else {
+            throw CardanoTxBuilderError.valueError(
+                "Reference-script pricing stride \(range) gives \(tierCount) tiers for \(scriptsSize) bytes; at most \(Self.maxReferenceScriptTiers) are allowed.")
         }
 
         var tiers: [FeeBreakdown.ReferenceScriptTier] = []
@@ -148,7 +159,7 @@ public struct Utils {
     ) async throws -> UInt64 {
         try await feeBreakdown(
             context, length: length, execSteps: execSteps, maxMemUnit: maxMemUnit, refScriptSize: refScriptSize
-        ).total
+        ).checkedTotal()
     }
 
     /// The fee ``calculateFee(_:length:execSteps:maxMemUnit:refScriptSize:)``
@@ -274,7 +285,11 @@ public struct Utils {
         let dataHashSize: UInt64 = hasDatum ? 10 : 0
         let finalizedSize = utxoEntrySize + bSize + dataHashSize
         
-        return finalizedSize * UInt64(protocolParameters.coinsPerUtxoWord)
+        let (minAda, overflow) = finalizedSize.multipliedReportingOverflow(by: UInt64(protocolParameters.coinsPerUtxoWord))
+        guard !overflow else {
+            throw CardanoTxBuilderError.valueError("Minimum lovelace of \(finalizedSize) words overflows")
+        }
+        return minAda
     }
     
     /// Calculate minimum lovelace a transaction output needs to hold post alonzo.
@@ -305,8 +320,12 @@ public struct Utils {
             postAlonzo: true
         )
         
-        return (constantOverhead + UInt64(try tmpOut.toCBORData().count))
-        * UInt64(protocolParameters.utxoCostPerByte)
+        let size = constantOverhead + UInt64(try tmpOut.toCBORData().count)
+        let (minAda, overflow) = size.multipliedReportingOverflow(by: UInt64(protocolParameters.utxoCostPerByte))
+        guard !overflow else {
+            throw CardanoTxBuilderError.valueError("Minimum lovelace of \(size) bytes overflows")
+        }
+        return minAda
     }
 }
 
@@ -344,8 +363,22 @@ public struct FeeBreakdown: Sendable, Equatable {
     /// A fixed amount added on top, such as ``TxBuilder/feeBuffer``.
     public var buffer: UInt64 = 0
 
-    /// The whole fee.
-    public var total: UInt64 { sizeFee + fixedFee + executionFee + referenceScriptFee + buffer }
+    /// The whole fee, or `UInt64.max` if the parts overflow. ``checkedTotal()``
+    /// throws instead.
+    public var total: UInt64 { (try? checkedTotal()) ?? .max }
+
+    /// The whole fee, or an error when the parts don't fit in a `UInt64`.
+    public func checkedTotal() throws -> UInt64 {
+        var sum: UInt64 = 0
+        for part in [sizeFee, fixedFee, executionFee, referenceScriptFee, buffer] {
+            let (next, overflow) = sum.addingReportingOverflow(part)
+            guard !overflow else {
+                throw CardanoTxBuilderError.valueError("Fee overflows: \(sizeFee) + \(fixedFee) + \(executionFee) + \(referenceScriptFee) + \(buffer)")
+            }
+            sum = next
+        }
+        return sum
+    }
 }
 
 /// An exact non-negative fraction, for the ledger's fee arithmetic.
