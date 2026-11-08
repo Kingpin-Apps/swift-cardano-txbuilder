@@ -45,6 +45,13 @@ public class TxBuilder: Loggable {
     /// Additional amount of fee (in lovelace) that will be added on top of estimation
     public var feeBuffer: Int?
 
+    /// The most fee, in lovelace, ``build(changeAddress:mergeChange:collateralChangeAddress:)``
+    /// will put in a transaction. Fees are priced from the chain context's
+    /// protocol parameters, so this bounds what a wrong or dishonest provider
+    /// can spend. The default, 50 ADA, is far above any fee honest mainnet
+    /// parameters produce. Set `nil` to remove the cap.
+    public var maxFee: UInt64? = 50_000_000
+
     /// Time-to-live for the transaction
     public var ttl: SlotNumber?
 
@@ -689,6 +696,8 @@ public class TxBuilder: Loggable {
         copy.donation = self.donation
         copy.witnessOverride = self.witnessOverride
         copy.cip21Compatible = self.cip21Compatible
+        copy.maxFee = self.maxFee
+        copy._redeemers = self._redeemers
         copy.initialStakePoolRegistration = self.initialStakePoolRegistration
         copy.useRedeemerMap = self.useRedeemerMap
         
@@ -950,14 +959,14 @@ public class TxBuilder: Loggable {
                 let lastSlot = try await context.lastBlockSlot()
                 // If None is provided, the default value is -1000
                 let offset = autoValidityStartOffset ?? -1000
-                validityStart = SlotNumber(max(0, lastSlot + offset))
+                validityStart = try Self.slot(lastSlot, plus: offset)
             }
 
             if (isSmart || autoTtlOffset != nil) && ttl == nil {
                 let lastSlot = try await context.lastBlockSlot()
                 // If None is provided, the default value is 10_000
                 let offset = autoTtlOffset ?? 10_000
-                ttl = SlotNumber(max(0, lastSlot + offset))
+                ttl = try Self.slot(lastSlot, plus: offset)
             }
 
             var selectedUtxos: [UTxO] = []
@@ -1655,17 +1664,45 @@ public class TxBuilder: Loggable {
         return multiAssetArray.filter { !$0.isEmpty }
     }
 
+    /// Throws when `output` holds less than its minimum lovelace or its value
+    /// is larger than the protocol's `maxValueSize`.
+    private func requireValidOutput(_ output: TransactionOutput) async throws {
+        let minLovelace = try await Utils.minLovelacePostAlonzo(output, context)
+        guard output.amount.coin >= BigInt(minLovelace) else {
+            throw CardanoTxBuilderError.insufficientUTxOBalance(
+                "Change output holds \(output.amount.coin) lovelace, below its minimum \(minLovelace)")
+        }
+        let maxValueSize = Int(try await context.protocolParameters().maxValueSize)
+        guard try output.amount.toCBORData().count <= maxValueSize else {
+            throw CardanoTxBuilderError.invalidTransaction(
+                "Change output value is larger than maxValueSize \(maxValueSize)")
+        }
+    }
+
     private func ensureNoInputExclusionConflict() throws {
-        let intersection = Set(inputs).intersection(Set(excludedInputs))
+        let excluded = Set(excludedInputs)
+        let intersection = Set(inputs).intersection(excluded)
         if !intersection.isEmpty {
             throw CardanoTxBuilderError.invalidInput(
                 "Found common UTxOs between UTxO inputs and UTxO excluded_inputs: \(intersection)"
             )
         }
+        let collateralIntersection = Set(collaterals).intersection(excluded)
+        if !collateralIntersection.isEmpty {
+            throw CardanoTxBuilderError.invalidInput(
+                "Found common UTxOs between collaterals and UTxO excluded_inputs: \(collateralIntersection)"
+            )
+        }
     }
 
+    /// Bytes of reference scripts the ledger charges for: those carried by
+    /// reference inputs and, as Conway's `txNonDistinctRefScriptsSize` does,
+    /// those carried by the inputs the transaction spends. A UTxO anyone can
+    /// send to the wallet may carry one, so leaving spent inputs out would
+    /// leave the fee short.
     private func refScriptSize() throws -> Int {
-        try _referenceScripts.reduce(into: 0) { size, script in
+        let spent = _inputs.compactMap { $0.output.script }
+        return try (_referenceScripts + spent).reduce(into: 0) { size, script in
             switch script {
                 case .nativeScript(let script):
                     size += try script.toCBORData().count
@@ -1680,7 +1717,15 @@ public class TxBuilder: Loggable {
     }
 
     private func estimateFee() async throws -> Int64 {
-        Int64(try await estimateFeeBreakdown().total)
+        let total = try await estimateFeeBreakdown().checkedTotal()
+        if let maxFee, total > maxFee {
+            throw CardanoTxBuilderError.valueError(
+                "Estimated fee of \(total) lovelace exceeds maxFee \(maxFee); check the chain context's protocol parameters")
+        }
+        guard let fee = Int64(exactly: total) else {
+            throw CardanoTxBuilderError.valueError("Fee of \(total) lovelace overflows")
+        }
+        return fee
     }
 
     /// The fee this builder would charge for its current state, item by item.
@@ -1700,14 +1745,42 @@ public class TxBuilder: Loggable {
         var breakdown = try await Utils.feeBreakdown(
             context,
             length: UInt64(Self.ledgerSize(of: try await buildFullFakeTx())),
-            execSteps: UInt64(plutusExecutionUnits.steps),
-            maxMemUnit: UInt64(plutusExecutionUnits.mem),
+            execSteps: try Self.nonNegative(plutusExecutionUnits.steps, "Execution steps"),
+            maxMemUnit: try Self.nonNegative(plutusExecutionUnits.mem, "Execution memory"),
             refScriptSize: UInt64(refScriptSize())
         )
         if let feeBuffer {
-            breakdown.buffer = UInt64(feeBuffer)
+            breakdown.buffer = try Self.nonNegative(feeBuffer, "feeBuffer")
         }
         return breakdown
+    }
+
+    /// `lastSlot + offset`, clamped at 0, or an error when the chain tip and
+    /// offset overflow.
+    static func slot(_ lastSlot: Int, plus offset: Int) throws -> SlotNumber {
+        let (slot, overflow) = lastSlot.addingReportingOverflow(offset)
+        guard !overflow else {
+            throw CardanoTxBuilderError.valueError("Validity slot \(lastSlot) + \(offset) overflows")
+        }
+        return SlotNumber(max(0, slot))
+    }
+
+    /// `units` scaled by `1 + buffer`, rounded down, or an error when the
+    /// buffer is not a finite non-negative number or the result overflows.
+    static func buffered(_ units: Int64, _ buffer: Double) throws -> Int64 {
+        guard buffer.isFinite, buffer >= 0,
+              let scaled = Int64(exactly: (Double(units) * (1 + buffer)).rounded(.down))
+        else {
+            throw CardanoTxBuilderError.invalidState("Buffered execution units overflow: \(units) x (1 + \(buffer))")
+        }
+        return scaled
+    }
+
+    private static func nonNegative<T: BinaryInteger>(_ value: T, _ what: String) throws -> UInt64 {
+        guard let result = UInt64(exactly: value) else {
+            throw CardanoTxBuilderError.valueError("\(what) of \(value) is out of range")
+        }
+        return result
     }
 
     /// The execution units each redeemer needs, as the chain context evaluates
@@ -1937,16 +2010,21 @@ public class TxBuilder: Loggable {
                 for s in scripts.scripts {
                     tmp.formUnion(dfs(s))
                 }
-            default:
+            case .scriptNofK(let scripts):
+                for s in scripts.scripts {
+                    tmp.formUnion(dfs(s))
+                }
+            case .invalidBefore, .invalidHereAfter:
                 break
             }
             return tmp
         }
 
-        if let nativeScripts = nativeScripts {
-            for script in nativeScripts {
-                results.formUnion(dfs(script))
-            }
+        // Every native script the transaction carries, whether set through
+        // `nativeScripts` or attached to an input, mint, withdrawal,
+        // certificate, vote or proposal.
+        for case .nativeScript(let script) in allScripts {
+            results.formUnion(dfs(script))
         }
 
         return results
@@ -2256,7 +2334,8 @@ public class TxBuilder: Loggable {
                     if let addressType = candidate.output.address.addressType,
                        addressType != .scriptKey && addressType != .scriptScript && addressType != .scriptPointer && addressType != .scriptNone,
                        candidate.output.amount.coin > 2_000_000,
-                       !collaterals.contains(candidate)
+                       !collaterals.contains(candidate),
+                       !excludedInputs.contains(candidate)
                     {
                         collaterals.append(candidate)
                         curTotal += candidate.output.amount
@@ -2362,6 +2441,7 @@ public class TxBuilder: Loggable {
                 mergeChange: mergeChange,
                 collateralChangeAddress: collateralChangeAddress
             )
+            let maxUnits = try await context.protocolParameters().maxTxExecutionUnits
 
             for var redeemer in _redeemerList {
                 guard let tag = redeemer.tag else {
@@ -2379,9 +2459,15 @@ public class TxBuilder: Loggable {
                     )
                 }
 
+                guard exUnits.mem >= 0, exUnits.steps >= 0,
+                      UInt64(exUnits.mem) <= maxUnits.memory, UInt64(exUnits.steps) <= maxUnits.steps
+                else {
+                    throw CardanoTxBuilderError.invalidState(
+                        "Evaluated execution units for \(key) are outside the protocol limits: \(exUnits)")
+                }
                 redeemer.exUnits = ExecutionUnits(
-                    mem: Int64(Double(exUnits.mem) * (1 + executionMemoryBuffer)),
-                    steps: Int64(Double(exUnits.steps) * (1 + executionStepBuffer))
+                    mem: try Self.buffered(exUnits.mem, executionMemoryBuffer),
+                    steps: try Self.buffered(exUnits.steps, executionStepBuffer)
                 )
                 
                 // Update the redeemer in its original storage location
@@ -2477,16 +2563,25 @@ public class TxBuilder: Loggable {
         let originalOutputs = outputs
         var changeOutputIndex: Int?
 
-        func mergeChanges(_ changes: [TransactionOutput]) throws {
+        func mergeChanges(_ changes: [TransactionOutput]) async throws {
             if let idx = changeOutputIndex,
                 changes.count == 1
             {
                 // Add the leftover change to the TransactionOutput containing the change address
                 _outputs[idx].amount += changes[0].amount
+                try await requireValidOutput(_outputs[idx])
             } else {
                 _outputs += changes
+                // Change computed without min-UTxO guards (a merge was planned
+                // but packing split the change) must still be a valid output.
+                if mergeChange {
+                    for change in changes { try await requireValidOutput(change) }
+                }
             }
         }
+
+        // The min-UTxO guards are relaxed only when the change will be merged
+        // into an existing output, whose final value is checked above.
 
         if let changeAddress = changeAddress {
             if mergeChange {
@@ -2508,10 +2603,10 @@ public class TxBuilder: Loggable {
                 outputs: outputs,
                 address: changeAddress,
                 preciseFee: true,
-                respectMinUtxo: !mergeChange
+                respectMinUtxo: !(mergeChange && changeOutputIndex != nil)
             )
 
-            try mergeChanges(changes)
+            try await mergeChanges(changes)
         }
 
         // With changes included, we can estimate the fee more precisely
@@ -2525,10 +2620,10 @@ public class TxBuilder: Loggable {
                 outputs: outputs,
                 address: changeAddress,
                 preciseFee: true,
-                respectMinUtxo: !mergeChange
+                respectMinUtxo: !(mergeChange && changeOutputIndex != nil)
             )
 
-            try mergeChanges(changes)
+            try await mergeChanges(changes)
         }
     }
 }
