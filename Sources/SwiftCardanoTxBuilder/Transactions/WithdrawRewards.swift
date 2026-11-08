@@ -31,8 +31,17 @@ public extension TxBuilder.Transactions {
             )
         }
         
-        let rewardsSum = stakeAddressInfo.reduce(0) { partialResult, info in
-            partialResult + info.rewardAccountBalance
+        var rewardsSum: Int64 = 0
+        for info in stakeAddressInfo {
+            guard info.rewardAccountBalance >= 0 else {
+                throw CardanoTxBuilderError.valueError(
+                    "Negative reward balance reported for \(stakeAddress)")
+            }
+            let (sum, overflow) = rewardsSum.addingReportingOverflow(info.rewardAccountBalance)
+            guard !overflow else {
+                throw CardanoTxBuilderError.valueError("Reward balances for \(stakeAddress) overflow")
+            }
+            rewardsSum = sum
         }
         
         guard rewardsSum > 0 else {
