@@ -81,8 +81,7 @@ public class LargestFirstSelector: UTxOSelector {
         var available = utxos.sorted {
             $0.output.lovelace > $1.output.lovelace
         }
-        let maxFee = includeMaxFee ? try await Utils.maxTxFee(context) : 0
-        var totalRequested = Value(coin: Int64(maxFee))
+        var totalRequested = Value(coin: try await requestedMaxFee(context, includeMaxFee))
 
         for output in outputs {
             totalRequested = totalRequested + output.amount
@@ -180,7 +179,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
         let index: Int
         if let generator = randomGenerator {
             index = generator()
-            if index >= utxos.count {
+            if index < 0 || index >= utxos.count {
                 throw CardanoTxBuilderError.utxoSelectionFailed("Random index: \(index) out of range!")
             }
         } else {
@@ -226,14 +225,14 @@ public class RandomImproveMultiAsset: UTxOSelector {
         return assets
     }
 
-    private func getSingleAssetVal(value: Value) -> UInt64 {
+    private func getSingleAssetVal(value: Value) -> BigInt {
         if value.coin > 0 {
-            return UInt64(value.coin)
+            return BigInt(value.coin)
         } else {
             // Get the first (and only) asset value
-            let policyId = value.multiAsset.data.keys.first!
-            let assetName = value.multiAsset[policyId]!.data.keys.first!
-            return UInt64(value.multiAsset[policyId]![assetName]!)
+            guard let policyId = value.multiAsset.data.keys.first,
+                  let assetName = value.multiAsset[policyId]?.data.keys.first else { return 0 }
+            return BigInt(value.multiAsset[policyId]?[assetName] ?? 0)
         }
     }
     
@@ -243,19 +242,28 @@ public class RandomImproveMultiAsset: UTxOSelector {
     ///   - a: The first value containing only one asset
     ///   - b: The second value containing the same asset
     /// - Returns: Difference between the two values
-    private func findDiffByFormer(a: Value, b: Value) -> Int64 {
+    ///
+    /// Computed in `BigInt`: token quantities go up to 2^64 - 1 on the ledger
+    /// and their sums go further, so a narrower type would trap.
+    private func findDiffByFormer(a: Value, b: Value) -> BigInt {
         if a.coin > 0 {
-            return Int64(a.coin) - Int64(b.coin)
+            return BigInt(a.coin) - BigInt(b.coin)
         } else {
-            let policyId = a.multiAsset.data.keys.first!
-            let assetName = a.multiAsset[policyId]!.data.keys.first!
-            
-            let aAssetAmount = a.multiAsset[policyId]?[assetName] ?? 0
-            let bAssetAmount = b.multiAsset[policyId]?[assetName] ?? 0
-            return Int64(aAssetAmount) - Int64(bAssetAmount)
+            guard let policyId = a.multiAsset.data.keys.first,
+                  let assetName = a.multiAsset[policyId]?.data.keys.first else { return 0 }
+
+            let aAssetAmount = BigInt(a.multiAsset[policyId]?[assetName] ?? 0)
+            let bAssetAmount = BigInt(b.multiAsset[policyId]?[assetName] ?? 0)
+            return aAssetAmount - bAssetAmount
         }
     }
 
+    /// Randomly add remaining UTxOs while each one brings the selection
+    /// closer to `ideal` without passing `upperBound`.
+    ///
+    /// A loop, not recursion: the pool is every UTxO at the input addresses,
+    /// which anyone can grow by sending to them, so recursion depth would be
+    /// attacker-controlled and could overflow the thread stack.
     private func improve(
         selected: inout [UTxO],
         selectedAmount: inout Value,
@@ -264,38 +272,26 @@ public class RandomImproveMultiAsset: UTxOSelector {
         upperBound: Value,
         maxInputCount: Int?
     ) throws {
-        if remaining.isEmpty || findDiffByFormer(a: ideal, b: selectedAmount) <= 0 {
-            // In case where there is no remaining UTxOs or we already selected more than ideal,
-            // we cannot improve by randomly adding more UTxOs, therefore return immediate.
-            return
+        var pool = remaining
+        while !pool.isEmpty && findDiffByFormer(a: ideal, b: selectedAmount) > 0 {
+            if let maxInputCount = maxInputCount, selected.count > maxInputCount {
+                throw CardanoTxBuilderError.maxInputCountExceeded(
+                    "Max input count: \(maxInputCount) exceeded!")
+            }
+
+            let (index, toAdd) = try getNextRandom(utxos: pool)
+            let potentialAmount = selectedAmount + toAdd.output.amount
+
+            if findDiffByFormer(a: ideal, b: potentialAmount).magnitude
+                < findDiffByFormer(a: ideal, b: selectedAmount).magnitude
+                && findDiffByFormer(a: upperBound, b: potentialAmount) >= 0
+            {
+                selected.append(toAdd)
+                selectedAmount = potentialAmount
+            }
+
+            pool.remove(at: index)
         }
-
-        if let maxInputCount = maxInputCount, selected.count > maxInputCount {
-            throw CardanoTxBuilderError.maxInputCountExceeded(
-                "Max input count: \(maxInputCount) exceeded!")
-        }
-
-        let (index, toAdd) = try getNextRandom(utxos: remaining)
-        let potentialAmount = selectedAmount + toAdd.output.amount
-
-        if abs(findDiffByFormer(a: ideal, b: potentialAmount))
-            < abs(findDiffByFormer(a: ideal, b: selectedAmount))
-            && findDiffByFormer(a: upperBound, b: potentialAmount) >= 0
-        {
-            selected.append(toAdd)
-            selectedAmount = potentialAmount
-        }
-
-        var newRemaining = remaining
-        newRemaining.remove(at: index)
-        try improve(
-            selected: &selected,
-            selectedAmount: &selectedAmount,
-            remaining: newRemaining,
-            ideal: ideal,
-            upperBound: upperBound,
-            maxInputCount: maxInputCount
-        )
     }
 
     public func select(
@@ -308,8 +304,7 @@ public class RandomImproveMultiAsset: UTxOSelector {
     ) async throws -> ([UTxO], Value) {
         // Shallow copy the list
         var remaining = utxos
-        let maxFee = includeMaxFee ? try await Utils.maxTxFee(context) : 0
-        var requestSum = Value(coin: Int64(maxFee))
+        var requestSum = Value(coin: try await requestedMaxFee(context, includeMaxFee))
 
         for output in outputs {
             requestSum = requestSum + output.amount
@@ -396,4 +391,16 @@ public class RandomImproveMultiAsset: UTxOSelector {
 
         return (selected, selectedAmount - requestSum)
     }
+}
+
+/// The maximum fee a selector adds to the request, as lovelace a `Value`
+/// can hold, or an error when the chain context's parameters give a fee
+/// too large to represent.
+private func requestedMaxFee(_ context: any ChainContext, _ includeMaxFee: Bool) async throws -> Int64 {
+    guard includeMaxFee else { return 0 }
+    let maxFee = try await Utils.maxTxFee(context)
+    guard let coin = Int64(exactly: maxFee) else {
+        throw CardanoTxBuilderError.valueError("Maximum fee of \(maxFee) lovelace overflows")
+    }
+    return coin
 }
